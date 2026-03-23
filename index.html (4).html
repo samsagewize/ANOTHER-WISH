@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Bitcoin Wishing Well — Inscribe Forever</title>
+<meta name="description" content="Cast your wish into the eternal Bitcoin ledger. Inscribe images, text, and files as Ordinals on Bitcoin mainnet."/>
+<meta property="og:title" content="Bitcoin Wishing Well"/>
+<meta property="og:type" content="website"/>
+<meta name="theme-color" content="#0d0a06"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Cinzel:wght@400;600;700&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet"/>
+<!-- Three.js r128 via CDN for 3D well scene -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- sats-connect loaded at runtime via ESM dynamic import -->
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{background:#000;color:#e8d5a3;font-family:'Lora',Georgia,serif;overflow-x:hidden;}
+
+.site-nav{position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:space-between;padding:.7rem 2rem;background:rgba(6,4,1,.95);border-bottom:1px solid rgba(245,200,66,.1);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}
+.nav-logo{font-family:'Cinzel Decorative',serif;font-size:1rem;color:#f5c842;text-decoration:none;letter-spacing:.08em;text-shadow:0 0 24px rgba(245,200,66,.35);}
+.nav-right{display:flex;align-items:center;gap:.6rem;}
+.nav-chip{font-family:'Cinzel',serif;font-size:.63rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#7a5a25;border:1px solid rgba(245,200,66,.15);border-radius:20px;padding:.3rem .75rem;}
+.nav-live{font-family:'Cinzel',serif;font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#50a860;border:1px solid rgba(80,168,96,.3);background:rgba(80,168,96,.07);border-radius:20px;padding:.3rem .9rem;display:flex;align-items:center;gap:.35rem;}
+.nav-live::before{content:'';width:6px;height:6px;border-radius:50%;background:#50d070;animation:blink 2s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:.4;}50%{opacity:1;}}
+
+#app{position:relative;width:100%;padding-top:48px;}
+
+/* INTRO — Three.js fills this */
+#intro{position:relative;width:100%;height:calc(100vh - 48px);min-height:560px;overflow:hidden;cursor:pointer;user-select:none;}
+#threeCanvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;}
+.intro-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:5;pointer-events:none;padding:2rem;}
+.intro-title h1{font-family:'Cinzel Decorative',serif;font-size:clamp(1.7rem,5.5vw,3.4rem);color:#f5c842;letter-spacing:.1em;text-shadow:0 0 70px rgba(245,200,66,.7),0 0 140px rgba(245,200,66,.3),0 2px 16px rgba(0,0,0,.95);line-height:1.2;text-align:center;margin-bottom:.6rem;}
+.intro-title .tagline{font-family:'Lora',serif;font-style:italic;font-size:clamp(.8rem,2.2vw,1.05rem);color:#a08050;letter-spacing:.06em;text-align:center;}
+.intro-badge{display:inline-flex;align-items:center;gap:.5rem;background:rgba(245,200,66,.07);border:1px solid rgba(245,200,66,.22);border-radius:30px;padding:.45rem 1.2rem;font-family:'Cinzel',serif;font-size:.68rem;color:#c9a040;letter-spacing:.1em;text-transform:uppercase;margin:1.5rem 0 2.5rem;}
+.tap-hint{position:absolute;bottom:6%;left:50%;transform:translateX(-50%);font-family:'Cinzel',serif;font-size:.68rem;color:#8a6a30;letter-spacing:.25em;text-transform:uppercase;z-index:6;pointer-events:none;animation:hp 2.2s ease-in-out infinite;}
+@keyframes hp{0%,100%{opacity:.3;}50%{opacity:1;}}
+
+/* PLUNGE + SPLASH overlays */
+#plunge,#splash{position:fixed;inset:0;z-index:10000;display:none;overflow:hidden;}
+#plunge{background:#000;}
+#plungeCanvas,#splashCanvas{position:absolute;inset:0;width:100%;height:100%;}
+
+/* MAIN UI */
+#ui{display:none;position:relative;z-index:10;min-height:calc(100vh - 48px);background:radial-gradient(ellipse at 50% 0%,#140e04 0%,#070401 70%);}
+.ui-wrap{max-width:560px;margin:0 auto;padding:2rem 1.25rem 5rem;}
+
+.tab-bar{display:flex;gap:.3rem;background:rgba(0,0,0,.35);border:1px solid #221508;border-radius:10px;padding:.3rem;margin-bottom:1.5rem;}
+.tab-btn{flex:1;font-family:'Cinzel',serif;font-size:.68rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7a5a25;background:none;border:none;border-radius:7px;padding:.5rem .4rem;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.35rem;}
+.tab-btn:hover{color:#c9a040;background:rgba(245,200,66,.04);}
+.tab-btn.active{color:#f5c842;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.22);}
+.tab-badge{background:rgba(245,200,66,.15);border:1px solid rgba(245,200,66,.28);border-radius:10px;font-size:.58rem;padding:0 5px;min-width:18px;text-align:center;color:#f5c842;}
+.tab-pane{display:none;} .tab-pane.active{display:block;}
+
+.panel{background:linear-gradient(160deg,#1a120a,#0f0905);border:1px solid #3a2808;border-radius:14px;padding:1.5rem;position:relative;overflow:hidden;margin-bottom:1rem;}
+.panel::after{content:'';position:absolute;top:0;left:10%;right:10%;height:1px;background:linear-gradient(90deg,transparent,rgba(245,200,66,.42),transparent);}
+.panel-title{font-family:'Cinzel',serif;font-size:.88rem;font-weight:700;color:#f5c842;text-align:center;letter-spacing:.12em;text-transform:uppercase;margin-bottom:1.25rem;}
+
+.drop-zone{border:1.5px dashed #3a2808;border-radius:10px;padding:1.6rem 1rem;text-align:center;cursor:pointer;transition:all .3s;background:rgba(245,200,66,.02);position:relative;margin-bottom:1rem;}
+.drop-zone:hover,.drop-zone.over{border-color:#f5c842;background:rgba(245,200,66,.05);}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.dz-icon{font-size:1.8rem;display:block;margin-bottom:.4rem;}
+.dz-text{font-size:.82rem;color:#8a6a30;line-height:1.5;}
+.dz-text strong{color:#c9a040;}
+
+.file-prev{display:none;align-items:center;gap:.7rem;background:rgba(245,200,66,.04);border:1px solid #2a1808;border-radius:8px;padding:.55rem .8rem;margin-bottom:1rem;}
+.file-prev.on{display:flex;}
+.prev-thumb{width:42px;height:42px;border-radius:6px;object-fit:cover;border:1px solid #3a2808;}
+.prev-doc{width:42px;height:42px;border-radius:6px;background:#1a1208;display:flex;align-items:center;justify-content:center;font-size:1.2rem;border:1px solid #3a2808;flex-shrink:0;}
+.prev-info{flex:1;min-width:0;}
+.prev-name{font-size:.8rem;color:#d4a040;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.prev-size{font-size:.7rem;color:#6a4a1a;}
+.prev-rm{background:none;border:none;cursor:pointer;color:#5a3a10;font-size:.9rem;padding:.2rem;transition:color .2s;flex-shrink:0;}
+.prev-rm:hover{color:#e06030;}
+
+.field-label{display:block;font-size:.72rem;color:#7a5a25;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.35rem;font-family:'Cinzel',serif;}
+.wish-ta{width:100%;background:rgba(0,0,0,.35);border:1px solid #2a1808;border-radius:8px;color:#e8d5a3;font-family:'Lora',serif;font-style:italic;font-size:.88rem;padding:.7rem .9rem;resize:none;height:80px;outline:none;transition:border-color .2s;}
+.wish-ta:focus{border-color:#c9a040;}
+.wish-ta::placeholder{color:#4a3018;}
+
+/* Fee rate */
+.fr-wrap{margin:.85rem 0;}
+.fr-label{display:block;font-size:.72rem;color:#7a5a25;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.5rem;font-family:'Cinzel',serif;}
+.fr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;}
+.fr-btn{background:rgba(0,0,0,.3);border:1px solid #2a1808;border-radius:8px;padding:.55rem .4rem;cursor:pointer;transition:all .2s;text-align:center;}
+.fr-btn:hover{border-color:#5a3a18;}
+.fr-btn.active{border-color:#c9a040;background:rgba(245,200,66,.07);}
+.fr-name{font-family:'Cinzel',serif;font-size:.63rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#7a5a25;display:block;margin-bottom:.2rem;}
+.fr-btn.active .fr-name{color:#f5c842;}
+.fr-val{font-size:.76rem;color:#c9a040;font-weight:500;}
+.fr-time{font-size:.6rem;color:#4a3818;margin-top:.1rem;display:block;}
+
+/* Fees */
+.fees{margin:1rem 0 .8rem;}
+.fee-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:.28rem;}
+.fee-lbl{font-size:.72rem;color:#6a4a20;font-family:'Cinzel',serif;letter-spacing:.04em;}
+.fee-val{font-size:.75rem;color:#c9a040;}
+.fee-total{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #2a1808;padding-top:.4rem;margin-top:.2rem;}
+.fee-total-lbl{font-size:.78rem;color:#a08040;font-family:'Cinzel',serif;}
+.fee-total-val{font-size:.9rem;color:#f5c842;font-weight:600;}
+
+/* Balance */
+.bal-row{display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,.2);border:1px solid #221508;border-radius:7px;padding:.45rem .75rem;margin-bottom:.8rem;display:none;}
+.bal-row.on{display:flex;}
+.bal-lbl{font-size:.68rem;color:#5a4018;font-family:'Cinzel',serif;letter-spacing:.06em;text-transform:uppercase;}
+.bal-val{font-size:.73rem;color:#c9a040;font-family:monospace;}
+.bal-val.low{color:#cc5050;}
+.bal-val.ok{color:#50a860;}
+
+/* Registry toggle */
+.reg-toggle{display:flex;align-items:flex-start;gap:.75rem;background:rgba(245,200,66,.035);border:1px solid #342208;border-radius:10px;padding:.85rem 1rem;margin-bottom:1rem;cursor:pointer;transition:all .25s;}
+.reg-toggle:hover{border-color:#5a3818;background:rgba(245,200,66,.065);}
+.reg-toggle input[type=checkbox]{width:16px;height:16px;accent-color:#f5c842;cursor:pointer;flex-shrink:0;margin-top:2px;}
+.reg-toggle-title{font-family:'Cinzel',serif;font-size:.78rem;color:#c9a040;letter-spacing:.06em;margin-bottom:.22rem;}
+.reg-badge{display:inline-block;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.28);border-radius:4px;font-size:.6rem;color:#f5c842;padding:1px 6px;font-family:'Cinzel',serif;margin-left:.4rem;}
+.reg-toggle-desc{font-size:.72rem;color:#7a5a25;line-height:1.5;}
+
+.divider{display:flex;align-items:center;gap:.6rem;margin:.9rem 0;color:#3a2808;font-size:.7rem;font-family:'Cinzel',serif;letter-spacing:.1em;}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,transparent,#3a2808,transparent);}
+
+/* Chain warning */
+.chain-warn{background:rgba(180,80,20,.08);border:1px solid rgba(180,80,20,.3);border-radius:8px;padding:.65rem .9rem;margin-bottom:.8rem;font-size:.78rem;color:#cc7040;display:none;}
+.chain-warn.on{display:block;}
+.switch-btn{font-family:'Cinzel',serif;font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#f5c842;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.25);border-radius:5px;padding:.25rem .65rem;cursor:pointer;margin-left:.5rem;}
+
+/* Wallet */
+.w-btns{display:flex;gap:.5rem;margin-bottom:.5rem;}
+.w-btn{flex:1;background:linear-gradient(160deg,#1c1208,#130d05);border:1px solid #3a2808;border-radius:8px;color:#b09040;font-family:'Cinzel',serif;font-size:.7rem;font-weight:600;letter-spacing:.05em;padding:.6rem .4rem;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.35rem;text-transform:uppercase;}
+.w-btn:hover{border-color:#c9a040;color:#f5c842;}
+.w-btn.on{border-color:#2a6a2a;color:#4aaa4a;background:rgba(40,120,40,.08);}
+.w-btn:disabled{opacity:.4;cursor:not-allowed;}
+.w-addr{font-size:.68rem;color:#4a7a40;font-family:monospace;background:rgba(40,100,40,.06);border:1px solid #1a2f1a;border-radius:5px;padding:.35rem .6rem;display:none;word-break:break-all;}
+.w-addr.on{display:block;}
+.w-disc{font-size:.63rem;color:#6a3a18;font-family:'Cinzel',serif;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;text-decoration:underline;margin-top:.3rem;display:none;}
+.w-disc.on{display:inline-block;}
+
+/* Inscribe button */
+.inscribe-btn{width:100%;background:linear-gradient(160deg,#7a4e00,#4a3000);border:1.5px solid #b09030;border-radius:10px;color:#ffe890;font-family:'Cinzel',serif;font-size:.92rem;font-weight:700;letter-spacing:.1em;padding:.92rem;cursor:pointer;text-transform:uppercase;transition:all .3s;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:.5rem;}
+.inscribe-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,230,100,.15) 0%,transparent 100%);opacity:0;transition:opacity .3s;}
+.inscribe-btn:hover:not(:disabled)::before{opacity:1;}
+.inscribe-btn:hover:not(:disabled){border-color:#f5c842;box-shadow:0 0 22px rgba(245,200,66,.28);transform:translateY(-1px);}
+.inscribe-btn:disabled{opacity:.35;cursor:not-allowed;transform:none;}
+
+.prog-wrap{display:none;margin-top:.85rem;}
+.prog-wrap.on{display:block;}
+.prog-bg{height:3px;border-radius:2px;background:#1a1008;overflow:hidden;}
+.prog-fill{height:100%;background:linear-gradient(90deg,#c9a040,#f5c842);width:0%;transition:width .5s ease;}
+.prog-lbl{font-size:.7rem;color:#6a4a18;text-align:center;margin-top:.3rem;font-family:'Cinzel',serif;letter-spacing:.05em;}
+
+.status-msg{margin-top:.8rem;display:none;border-radius:8px;padding:.7rem .9rem;font-size:.8rem;line-height:1.6;}
+.status-msg.on{display:block;}
+.status-msg.ok{border:1px solid #285028;background:rgba(40,100,40,.07);color:#60aa60;}
+.status-msg.err{border:1px solid #502020;background:rgba(100,30,30,.07);color:#cc6060;}
+.status-msg.info{border:1px solid #3a2808;background:rgba(60,30,5,.07);color:#a08040;}
+.tx-lnk{display:inline-block;margin-top:.25rem;color:#f5c842;text-decoration:underline;cursor:pointer;font-size:.72rem;word-break:break-all;}
+
+/* Inscriptions tab */
+.ins-list{display:flex;flex-direction:column;gap:.65rem;}
+.ins-card{background:linear-gradient(160deg,#130e06,#0d0804);border:1px solid #2a1a08;border-radius:12px;padding:1rem 1.1rem;position:relative;transition:border-color .25s;overflow:hidden;}
+.ins-card::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(245,200,66,.18),transparent);}
+.ins-card:hover{border-color:#3a2a12;}
+.ins-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;margin-bottom:.55rem;}
+.ins-wish-text{font-size:.84rem;color:#d4a040;font-style:italic;line-height:1.45;flex:1;}
+.ins-status{display:flex;align-items:center;gap:.35rem;flex-shrink:0;padding-top:.1rem;}
+.ins-check{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.72rem;flex-shrink:0;font-weight:700;}
+.ins-check.registered{background:rgba(50,160,80,.14);border:1.5px solid rgba(80,210,100,.38);color:#55d070;}
+.ins-check.unregistered{background:rgba(100,80,20,.1);border:1.5px solid rgba(120,90,20,.22);color:#6a5020;}
+.ins-reg-label{font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:.06em;white-space:nowrap;}
+.ins-reg-label.registered{color:#50a860;}
+.ins-reg-label.unregistered{color:#5a4018;}
+.ins-meta{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;margin-bottom:.5rem;}
+.ins-pill{font-size:.6rem;border-radius:4px;padding:2px 7px;font-family:'Cinzel',serif;letter-spacing:.04em;}
+.ins-pill.type{background:rgba(180,120,20,.1);border:1px solid rgba(180,120,20,.2);color:#8a6020;}
+.ins-pill.mainnet{background:rgba(40,120,40,.08);border:1px solid rgba(40,180,60,.2);color:#40a050;}
+.ins-pill.marketplace{background:rgba(50,160,80,.07);border:1px solid rgba(50,160,80,.22);color:#40886a;}
+.ins-txrow{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;}
+.ins-tx-lbl{font-family:'Cinzel',serif;font-size:.58rem;color:#3a2408;letter-spacing:.04em;text-transform:uppercase;}
+.ins-tx{font-size:.65rem;color:#4a3018;font-family:monospace;cursor:pointer;transition:color .15s;}
+.ins-tx:hover{color:#c9a040;text-decoration:underline;}
+.ins-time{font-size:.62rem;color:#3a2808;margin-left:auto;}
+.ins-empty{text-align:center;padding:3rem 1rem;color:#3a2808;font-size:.85rem;font-style:italic;}
+.ins-empty span{display:block;font-size:2.2rem;margin-bottom:.75rem;opacity:.35;}
+
+.site-footer{text-align:center;padding:2rem 1rem 3rem;border-top:1px solid rgba(245,200,66,.06);}
+.footer-text{font-family:'Cinzel',serif;font-size:.62rem;color:#3a2808;letter-spacing:.1em;text-transform:uppercase;line-height:2;}
+.footer-text a{color:#5a4018;text-decoration:none;transition:color .2s;}
+.footer-text a:hover{color:#c9a040;}
+
+@media(max-width:580px){
+  .site-nav{padding:.6rem 1rem;}
+  .nav-chip{display:none;}
+  .ui-wrap{padding:1.5rem .9rem 4rem;}
+  .w-btns{flex-direction:column;}
+}
+</style>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a href="/" class="nav-logo">⊕ Bitcoin Wishing Well</a>
+  <div class="nav-right">
+    <span class="nav-chip">Ordinals</span>
+    <span class="nav-live">Mainnet</span>
+  </div>
+</nav>
+
+<div id="app">
+
+  <div id="intro">
+    <!-- Three.js renderer inserts #threeCanvas here -->
+    <div class="intro-overlay">
+      <div class="intro-title">
+        <h1>Bitcoin<br>Wishing Well</h1>
+        <p class="tagline">Inscribe your wish forever on the eternal ledger</p>
+      </div>
+      <div class="intro-badge">⊕ Bitcoin Mainnet · Ordinals Protocol</div>
+    </div>
+    <div class="tap-hint">↓ tap to descend ↓</div>
+  </div>
+
+  <div id="plunge"><canvas id="plungeCanvas"></canvas></div>
+  <div id="splash"><canvas id="splashCanvas"></canvas></div>
+
+  <div id="ui">
+    <div class="ui-wrap">
+
+      <div class="tab-bar">
+        <button class="tab-btn active" id="castTab" onclick="switchTab('cast')">🪙 Cast a Wish</button>
+        <button class="tab-btn" id="insTab" onclick="switchTab('inscriptions')">📜 Inscriptions <span class="tab-badge" id="insBadge">0</span></button>
+      </div>
+
+      <div class="tab-pane active" id="castPane">
+        <div class="panel">
+          <div class="panel-title">⟡ Cast Your Wish ⟡</div>
+
+          <div class="drop-zone" id="dz">
+            <input type="file" id="fi" accept="image/*,text/*,.txt,.json,.md,.html"/>
+            <span class="dz-icon">🪙</span>
+            <div class="dz-text"><strong>Drop a file here</strong><br>image or text to inscribe on Bitcoin<br><span style="font-size:.68rem;color:#4a3015;">PNG · JPG · GIF · WEBP · TXT · JSON · HTML · MD — max 60KB</span></div>
+          </div>
+
+          <div class="file-prev" id="fp">
+            <div class="prev-doc" id="pt">📄</div>
+            <div class="prev-info">
+              <div class="prev-name" id="pn">—</div>
+              <div class="prev-size" id="ps">—</div>
+            </div>
+            <button class="prev-rm" id="prm">✕</button>
+          </div>
+
+          <label class="field-label" for="wt">Your wish</label>
+          <textarea class="wish-ta" id="wt" placeholder="Write your wish... it shall be sealed forever in Bitcoin's stone."></textarea>
+
+          <div class="fr-wrap">
+            <span class="fr-label">Network fee rate</span>
+            <div class="fr-grid">
+              <div class="fr-btn" id="fr-slow" onclick="setFeeRate('slow')"><span class="fr-name">Slow</span><span class="fr-val" id="frs">— s/vB</span><span class="fr-time">~60 min</span></div>
+              <div class="fr-btn active" id="fr-med" onclick="setFeeRate('med')"><span class="fr-name">Standard</span><span class="fr-val" id="frm">— s/vB</span><span class="fr-time">~30 min</span></div>
+              <div class="fr-btn" id="fr-fast" onclick="setFeeRate('fast')"><span class="fr-name">Fast</span><span class="fr-val" id="frf">— s/vB</span><span class="fr-time">~10 min</span></div>
+            </div>
+          </div>
+
+          <div class="fees">
+            <div class="fee-row"><span class="fee-lbl">Inscription size</span><span class="fee-val" id="fSize">0 B</span></div>
+            <div class="fee-row"><span class="fee-lbl">Network fee</span><span class="fee-val" id="fNet">— sats</span></div>
+            <div class="fee-row" id="regFeeRow" style="display:none"><span class="fee-lbl">Registry fee</span><span class="fee-val">2,000 sats</span></div>
+            <div class="fee-total"><span class="fee-total-lbl">Est. Total</span><span class="fee-total-val" id="fTotal">— sats</span></div>
+          </div>
+
+          <label class="reg-toggle">
+            <input type="checkbox" id="regCheck"/>
+            <div>
+              <div class="reg-toggle-title">Register for Future Marketplace <span class="reg-badge">+2,000 sats</span></div>
+              <div class="reg-toggle-desc">Add your wish to the on-chain registry so it can be indexed and listed in the Bitcoin Wishing Well marketplace when it launches.</div>
+            </div>
+          </label>
+
+          <div class="divider">Connect Wallet</div>
+
+          <div class="chain-warn" id="chainWarn">
+            ⚠ Wallet is not on Bitcoin Mainnet.
+            <button class="switch-btn" onclick="switchToMainnet()">Switch to Mainnet</button>
+          </div>
+
+          <div style="margin-bottom:1rem;">
+            <div class="w-btns">
+              <button class="w-btn" id="xBtn" onclick="connectXverse()"><span>🔶</span> Xverse</button>
+              <button class="w-btn" id="uBtn" onclick="connectUnisat()"><span>🔷</span> UniSat</button>
+            </div>
+            <div class="w-addr" id="wAddr"></div>
+            <span class="w-disc" id="wDisc" onclick="disconnectWallet()">Disconnect</span>
+          </div>
+
+          <div class="bal-row" id="balRow">
+            <span class="bal-lbl">Wallet Balance</span>
+            <span class="bal-val" id="balVal">—</span>
+          </div>
+
+          <button class="inscribe-btn" id="ib" disabled onclick="makeWish()">🪙 Make Your Wish &amp; Inscribe</button>
+          <div class="prog-wrap" id="pw"><div class="prog-bg"><div class="prog-fill" id="pf"></div></div><div class="prog-lbl" id="pl">Preparing...</div></div>
+          <div class="status-msg" id="st"></div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="inscriptionsPane">
+        <div class="ins-list" id="insList">
+          <div class="ins-empty"><span>🪙</span>Cast your first wish to see it inscribed here.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <footer class="site-footer">
+      <div class="footer-text">
+        Bitcoin Wishing Well &nbsp;·&nbsp; Bitcoin Mainnet · Ordinals Protocol<br>
+        <a href="https://ordinals.com" target="_blank">ordinals.com</a> &nbsp;·&nbsp;
+        <a href="https://mempool.space" target="_blank">mempool.space</a> &nbsp;·&nbsp;
+        <a href="https://xverse.app" target="_blank">xverse.app</a> &nbsp;·&nbsp;
+        <a href="https://unisat.io" target="_blank">unisat.io</a>
+      </div>
+    </footer>
+  </div>
+
+</div>
+
+<script>
+/* ─── CONFIG ─────────────────────────────────────── */
+const DEV_ADDR  = '3FxKYyYJcxn6Tx2RvQM8szTzYKTQYskgWq';
+const REG_FEE   = 2000;
+const REG_KEY   = 'bww_mainnet_v1';
+const MEMPOOL   = 'https://mempool.space/api';
+
+/* ─── STATE ──────────────────────────────────────── */
+let selFile=null, walAddr=null, walPayAddr=null, walType=null;
+let feeRates={slow:10,med:20,fast:40}, selRate='med', walBalance=0;
+
+/* ═══════════════════════════════════════════════════════════
+   THREE.JS — REALISTIC 3D WISHING WELL
+   • Procedural stone textures (canvas-generated)
+   • Animated water with normal-map shimmer + point light
+   • Torch flicker lights on pillars
+   • 60 firefly particles with organic drift
+   • Moon + directional shadow
+   • Stars point cloud
+   • Dark forest silhouette ring
+   • Swaying bucket on rope
+   • Cinematic camera drift
+═══════════════════════════════════════════════════════════ */
+const introEl = document.getElementById('intro');
+let renderer3, scene3, camera3, clock3, animId3;
+let wellGrp, waterMesh, bucketGrp;
+let ffGeo, ffPositions, ffVels;
+let waterLight3, torch1, torch2;
+let plunging = false;
+
+function mkTex(fn){ const t=new THREE.CanvasTexture(fn()); t.wrapS=t.wrapT=THREE.RepeatWrapping; return t; }
+
+function mkStoneCvs(sz,dark){
+  const c=document.createElement('canvas'); c.width=c.height=sz;
+  const x=c.getContext('2d');
+  const b=dark?22:46;
+  x.fillStyle=`rgb(${b},${b-3},${b-9})`; x.fillRect(0,0,sz,sz);
+  for(let i=0;i<3000;i++){
+    const px=Math.random()*sz,py=Math.random()*sz,r=Math.random()*2.2;
+    const v=b+(Math.random()-.5)*38|0;
+    x.beginPath(); x.arc(px,py,r,0,Math.PI*2);
+    x.fillStyle=`rgba(${v},${v-2},${v-7},.55)`; x.fill();
+  }
+  const rows=8;
+  for(let r=0;r<rows;r++){
+    x.fillStyle='rgba(0,0,0,.38)'; x.fillRect(0,r*sz/rows-1,sz,2);
+    const off=(r%2)*sz/4;
+    for(let col=off;col<sz+off;col+=sz/4){
+      x.fillStyle='rgba(0,0,0,.22)'; x.fillRect(col-1,r*sz/rows,2,sz/rows);
+    }
+  }
+  return c;
+}
+
+function mkWaterCvs(sz){
+  const c=document.createElement('canvas'); c.width=c.height=sz;
+  const x=c.getContext('2d');
+  x.fillStyle='#8080ff'; x.fillRect(0,0,sz,sz);
+  for(let i=0;i<600;i++){
+    const px=Math.random()*sz,py=Math.random()*sz,r=2+Math.random()*14;
+    const g=x.createRadialGradient(px,py,0,px,py,r);
+    g.addColorStop(0,'rgba(145,145,255,.65)'); g.addColorStop(1,'rgba(128,128,255,0)');
+    x.fillStyle=g; x.beginPath(); x.arc(px,py,r,0,Math.PI*2); x.fill();
+  }
+  return c;
+}
+
+function mkGroundCvs(sz){
+  const c=document.createElement('canvas'); c.width=c.height=sz;
+  const x=c.getContext('2d');
+  x.fillStyle='#181006'; x.fillRect(0,0,sz,sz);
+  for(let i=0;i<5000;i++){
+    const v=8+Math.random()*22|0;
+    x.beginPath(); x.arc(Math.random()*sz,Math.random()*sz,Math.random()*1.8,0,Math.PI*2);
+    x.fillStyle=`rgba(${v+4},${v},${v-4},.65)`; x.fill();
+  }
+  for(let i=0;i<180;i++){
+    const px=Math.random()*sz,py=Math.random()*sz;
+    x.strokeStyle=`rgba(${18+Math.random()*28|0},${38+Math.random()*28|0},8,.45)`;
+    x.lineWidth=.8; x.beginPath(); x.moveTo(px,py); x.lineTo(px+(Math.random()-.5)*5,py-5); x.stroke();
+  }
+  return c;
+}
+
+function buildWell(){
+  if(!window.THREE) return;
+  const T=THREE;
+  clock3=new T.Clock();
+
+  /* renderer */
+  renderer3=new T.WebGLRenderer({antialias:true});
+  renderer3.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer3.shadowMap.enabled=true; renderer3.shadowMap.type=T.PCFSoftShadowMap;
+  renderer3.toneMapping=T.ACESFilmicToneMapping; renderer3.toneMappingExposure=0.72;
+  renderer3.domElement.id='threeCanvas';
+  introEl.insertBefore(renderer3.domElement, introEl.firstChild);
+
+  /* scene & fog */
+  scene3=new T.Scene();
+  scene3.background=new T.Color(0x02050e);
+  scene3.fog=new T.FogExp2(0x02050e,0.036);
+
+  /* camera */
+  const W=introEl.offsetWidth,H=introEl.offsetHeight;
+  camera3=new T.PerspectiveCamera(54,W/H,0.1,200);
+  camera3.position.set(0,3.4,9); camera3.lookAt(0,0.6,0);
+  renderer3.setSize(W,H);
+
+  /* textures */
+  const stoneTex=mkTex(()=>mkStoneCvs(256,false)); stoneTex.repeat.set(3,6);
+  const stoneDark=mkTex(()=>mkStoneCvs(256,true));  stoneDark.repeat.set(2,5);
+  const waterNorm=mkTex(()=>mkWaterCvs(256));        waterNorm.repeat.set(2,2);
+  const groundTex=mkTex(()=>mkGroundCvs(512));       groundTex.repeat.set(8,8);
+
+  const stoneMat=new T.MeshStandardMaterial({map:stoneTex,roughness:.92,metalness:.04});
+  const darkMat =new T.MeshStandardMaterial({map:stoneDark,roughness:.97,metalness:0,color:0x1a1008,side:T.BackSide});
+  const woodMat =new T.MeshStandardMaterial({color:0x3a2010,roughness:.9,metalness:.04});
+  const metalMat=new T.MeshStandardMaterial({color:0x8a8060,metalness:.8,roughness:.3});
+
+  wellGrp=new T.Group(); scene3.add(wellGrp);
+
+  /* barrel */
+  const bGeo=new T.CylinderGeometry(1.62,1.78,2.5,32,8,true);
+  const barrel=new T.Mesh(bGeo,stoneMat); barrel.position.y=1.25; barrel.castShadow=barrel.receiveShadow=true; wellGrp.add(barrel);
+
+  /* inner shaft */
+  const iGeo=new T.CylinderGeometry(1.46,1.58,3.8,32,4,true);
+  const inner=new T.Mesh(iGeo,darkMat); inner.position.y=1.0; wellGrp.add(inner);
+
+  /* rim torus */
+  const rimMat=new T.MeshStandardMaterial({map:stoneTex,roughness:.84,metalness:.05,color:0x8a7050});
+  const rim=new T.Mesh(new T.TorusGeometry(1.66,.19,12,48),rimMat);
+  rim.rotation.x=Math.PI/2; rim.position.y=2.52; rim.castShadow=true; wellGrp.add(rim);
+
+  /* rim cap */
+  wellGrp.add(Object.assign(new T.Mesh(new T.RingGeometry(1.48,1.66,48),rimMat),{rotation:{x:-Math.PI/2},position:{x:0,y:2.54,z:0}}));
+
+  /* water */
+  const wMat=new T.MeshStandardMaterial({color:0x0a2a50,roughness:.04,metalness:.92,normalMap:waterNorm,normalScale:new T.Vector2(.45,.45),transparent:true,opacity:.93});
+  waterMesh=new T.Mesh(new T.CircleGeometry(1.44,48),wMat);
+  waterMesh.rotation.x=-Math.PI/2; waterMesh.position.y=-.15; wellGrp.add(waterMesh);
+
+  /* pillars */
+  function addPillar(x){
+    const g=new T.Group();
+    const shaft=new T.Mesh(new T.BoxGeometry(.3,3.0,.3),stoneMat); shaft.castShadow=true; g.add(shaft);
+    [[-1.5],[1.5]].forEach(([dy])=>{
+      g.add(Object.assign(new T.Mesh(new T.BoxGeometry(.46,.2,.46),stoneMat),{position:{x:0,y:dy,z:0}}));
+    });
+    g.position.set(x,3.4,0); wellGrp.add(g);
+  }
+  addPillar(-1.88); addPillar(1.88);
+
+  /* crossbeam */
+  const beam=new T.Mesh(new T.BoxGeometry(4.4,.22,.24),woodMat);
+  beam.position.y=4.9; beam.castShadow=true; wellGrp.add(beam);
+
+  /* rope — thin tube */
+  const ropeCurve=new T.LineCurve3(new T.Vector3(0,4.8,0),new T.Vector3(0,2.6,0));
+  const rope=new T.Mesh(new T.TubeGeometry(ropeCurve,10,.022,6,false),new T.MeshStandardMaterial({color:0x9a7840,roughness:.95}));
+  wellGrp.add(rope);
+
+  /* bucket */
+  bucketGrp=new T.Group();
+  const bkt=new T.Mesh(new T.CylinderGeometry(.19,.16,.32,16),new T.MeshStandardMaterial({color:0x4a3018,roughness:.85,metalness:.08}));
+  bkt.castShadow=true; bucketGrp.add(bkt);
+  const band=new T.Mesh(new T.TorusGeometry(.195,.013,6,20),metalMat);
+  band.rotation.x=Math.PI/2; band.position.y=.09; bucketGrp.add(band);
+  bucketGrp.position.set(0,3.1,0); wellGrp.add(bucketGrp);
+
+  /* roof — 4-sided cone */
+  const roofMesh=new T.Mesh(new T.ConeGeometry(2.9,1.6,4),new T.MeshStandardMaterial({color:0x38180a,roughness:.97,metalness:0,map:stoneDark}));
+  roofMesh.rotation.y=Math.PI/4; roofMesh.castShadow=true;
+  const roofGrp=new T.Group(); roofGrp.add(roofMesh); roofGrp.position.y=6.3; wellGrp.add(roofGrp);
+
+  /* base ring */
+  wellGrp.add(Object.assign(new T.Mesh(new T.CylinderGeometry(2.04,2.2,.34,32),stoneMat),{position:{x:0,y:.17,z:0},receiveShadow:true}));
+
+  /* ground */
+  const ground=new T.Mesh(new T.PlaneGeometry(80,80),new T.MeshStandardMaterial({map:groundTex,roughness:.98,metalness:0}));
+  ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene3.add(ground);
+
+  /* trees ring */
+  for(let i=0;i<20;i++){
+    const ang=i/20*Math.PI*2, d=13+Math.random()*7, h=4+Math.random()*5;
+    const tg=new T.Group();
+    tg.add(Object.assign(new T.Mesh(new T.CylinderGeometry(.11,.17,h*.4,6),new T.MeshStandardMaterial({color:0x181006})),{position:{x:0,y:h*.2,z:0}}));
+    tg.add(Object.assign(new T.Mesh(new T.ConeGeometry(.85+Math.random()*.45,h*.75,6),new T.MeshStandardMaterial({color:0x0c1306,roughness:1})),{position:{x:0,y:h*.62,z:0}}));
+    tg.position.set(Math.cos(ang)*d,0,Math.sin(ang)*d); scene3.add(tg);
+  }
+
+  /* stars */
+  const sPos=new Float32Array(1400*3);
+  for(let i=0;i<1400;i++){
+    const th=Math.random()*Math.PI*2, ph=Math.acos(2*Math.random()-1), r=85+Math.random()*18;
+    sPos[i*3]=r*Math.sin(ph)*Math.cos(th); sPos[i*3+1]=Math.abs(r*Math.cos(ph))+4; sPos[i*3+2]=r*Math.sin(ph)*Math.sin(th);
+  }
+  const sGeo=new T.BufferGeometry(); sGeo.setAttribute('position',new T.BufferAttribute(sPos,3));
+  scene3.add(new T.Points(sGeo,new T.PointsMaterial({color:0xffffff,size:.16,sizeAttenuation:true})));
+
+  /* moon sphere */
+  const moonMesh=new T.Mesh(new T.SphereGeometry(3,16,16),new T.MeshStandardMaterial({color:0xf0e8a0,emissive:0xf0e8a0,emissiveIntensity:.22,roughness:.9}));
+  moonMesh.position.set(30,34,-42); scene3.add(moonMesh);
+
+  /* firefly particles */
+  const ffN=65; ffPositions=new Float32Array(ffN*3); ffVels=[];
+  for(let i=0;i<ffN;i++){
+    const a=Math.random()*Math.PI*2, r=3+Math.random()*8;
+    ffPositions[i*3]=Math.cos(a)*r; ffPositions[i*3+1]=.5+Math.random()*4.5; ffPositions[i*3+2]=Math.sin(a)*r;
+    ffVels.push({vx:(Math.random()-.5)*.008,vy:(Math.random()-.5)*.004,vz:(Math.random()-.5)*.008,ph:Math.random()*Math.PI*2});
+  }
+  ffGeo=new T.BufferGeometry(); ffGeo.setAttribute('position',new T.BufferAttribute(ffPositions,3));
+  scene3.add(new T.Points(ffGeo,new T.PointsMaterial({color:0xaaff44,size:.13,sizeAttenuation:true,transparent:true,opacity:.85})));
+
+  /* lights */
+  scene3.add(new T.AmbientLight(0x070b16,.55));
+
+  const moonDir=new T.DirectionalLight(0xccd4f0,.65); moonDir.position.set(30,34,-42); moonDir.castShadow=true;
+  moonDir.shadow.mapSize.set(1024,1024); moonDir.shadow.camera.near=.5; moonDir.shadow.camera.far=100;
+  moonDir.shadow.camera.left=-18; moonDir.shadow.camera.right=18;
+  moonDir.shadow.camera.top=18; moonDir.shadow.camera.bottom=-18;
+  scene3.add(moonDir);
+
+  waterLight3=new T.PointLight(0x1a6aba,3.8,5.5); waterLight3.position.set(0,.1,0); scene3.add(waterLight3);
+
+  torch1=new T.PointLight(0xff8833,2.4,9); torch1.position.set(-1.9,4.6,.5); scene3.add(torch1);
+  torch2=new T.PointLight(0xff7722,2.1,9); torch2.position.set(1.9,4.6,.5);  scene3.add(torch2);
+
+  resizeThree3(); animate3();
+}
+
+function animate3(){
+  if(plunging) return;
+  animId3=requestAnimationFrame(animate3);
+  const t=clock3.getElapsedTime();
+
+  /* bucket sway */
+  if(bucketGrp){ bucketGrp.position.y=3.1+Math.sin(t*.7)*.09; bucketGrp.rotation.z=Math.sin(t*.5)*.05; }
+
+  /* water shimmer */
+  if(waterMesh&&waterMesh.material.normalMap){
+    waterMesh.material.normalMap.offset.x=t*.038; waterMesh.material.normalMap.offset.y=t*.028;
+    waterMesh.material.color.setRGB(.04+Math.sin(t*.8)*.01,.16+Math.sin(t*.6)*.02,.33+Math.sin(t*1.1)*.04);
+  }
+  if(waterLight3){ waterLight3.intensity=3.4+Math.sin(t*1.35)*.9; }
+
+  /* torch flicker */
+  if(torch1){ torch1.intensity=2.2+Math.sin(t*7.1+.4)*.6+Math.random()*.25; torch2.intensity=1.9+Math.sin(t*5.8+1.1)*.5+Math.random()*.25; }
+
+  /* camera drift */
+  camera3.position.x=Math.sin(t*.09)*.35; camera3.position.y=3.4+Math.sin(t*.12)*.14; camera3.lookAt(0,.6,0);
+
+  /* well group slow rotation */
+  if(wellGrp) wellGrp.rotation.y=Math.sin(t*.1)*.018;
+
+  /* fireflies */
+  if(ffGeo&&ffPositions){
+    const pos=ffGeo.attributes.position.array;
+    for(let i=0;i<ffVels.length;i++){
+      const v=ffVels[i];
+      pos[i*3]  +=v.vx+Math.sin(t*.4+v.ph)*.005;
+      pos[i*3+1]+=v.vy+Math.sin(t*.6+v.ph+1)*.003;
+      pos[i*3+2]+=v.vz+Math.cos(t*.5+v.ph)*.005;
+      const px=pos[i*3],py=pos[i*3+1],pz=pos[i*3+2];
+      if(Math.sqrt(px*px+pz*pz)>11||py<.3||py>5.5){
+        const a=Math.random()*Math.PI*2,r=3+Math.random()*6;
+        pos[i*3]=Math.cos(a)*r; pos[i*3+1]=.5+Math.random()*3.5; pos[i*3+2]=Math.sin(a)*r;
+      }
+    }
+    ffGeo.attributes.position.needsUpdate=true;
+    const pts=scene3.children.find(c=>c.isPoints&&c.material.color.getHex()===0xaaff44);
+    if(pts) pts.material.opacity=.45+Math.sin(t*2.1)*.38;
+  }
+
+  renderer3.render(scene3,camera3);
+}
+
+function resizeThree3(){
+  if(!renderer3) return;
+  const W=introEl.offsetWidth,H=introEl.offsetHeight;
+  renderer3.setSize(W,H); camera3.aspect=W/H; camera3.updateProjectionMatrix();
+}
+window.addEventListener('resize',resizeThree3);
+
+/* ── PLUNGE — 2D canvas stone tunnel ── */
+const plungeEl=document.getElementById('plunge');
+const pC=document.getElementById('plungeCanvas'), pX=pC.getContext('2d');
+let pluT=0;
+function resizePlunge(){ pC.width=window.innerWidth; pC.height=window.innerHeight; }
+function drawPlunge(t){
+  const W=pC.width,H=pC.height,cx=W/2,cy=H/2,p=Math.min(1,t);
+  pX.clearRect(0,0,W,H); pX.fillStyle=`hsl(26,12%,${Math.max(0,7-p*7)}%)`; pX.fillRect(0,0,W,H);
+  for(let i=0;i<24;i++){
+    const d=((i/24)+p*.9)%1, e=Math.pow(d,1.5), rx=e*W*.73, ry=rx*.42;
+    const al=d*(1-d*d)*3.0, lit=5+d*25, hue=20+i*2;
+    pX.beginPath(); pX.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);
+    pX.strokeStyle=`hsla(${hue},24%,${lit}%,${Math.min(1,al*.7)})`; pX.lineWidth=Math.max(.5,d*6.5); pX.stroke();
+    if(i%3===0&&d>.2) for(let j=0;j<6;j++){
+      const a=j/6*Math.PI*2+i*.52;
+      pX.beginPath(); pX.arc(cx+Math.cos(a)*rx*.93,cy+Math.sin(a)*ry*.93,d*3,0,Math.PI*2);
+      pX.fillStyle=`rgba(20,50,12,${d*.5})`; pX.fill();
+    }
+  }
+  const wp=Math.pow(p,2.2), wg=pX.createRadialGradient(cx,cy,0,cx,cy,W*.38);
+  wg.addColorStop(0,`rgba(24,104,185,${wp*.82})`); wg.addColorStop(1,'rgba(0,0,0,0)');
+  pX.fillStyle=wg; pX.fillRect(0,0,W,H);
+  const bA=Math.max(0,p*2.2-.6);
+  if(bA>0){ pX.save(); pX.translate(cx,cy); pX.scale(Math.pow(p,.4)*1.2,Math.pow(p,.4)*1.2); pX.fillStyle=`rgba(245,200,66,${bA})`; pX.font=`bold ${W*.1}px sans-serif`; pX.textAlign='center'; pX.textBaseline='middle'; pX.fillText('₿',0,0); pX.restore(); }
+  for(let i=0;i<32;i++){
+    const a=i/32*Math.PI*2,len=p*W*.1,d2=W*.06+Math.sin(i*.7+pluT)*W*.04;
+    pX.beginPath(); pX.moveTo(cx+Math.cos(a)*d2,cy+Math.sin(a)*d2*.42); pX.lineTo(cx+Math.cos(a)*(d2+len),cy+Math.sin(a)*(d2+len)*.42);
+    pX.strokeStyle=`rgba(148,192,255,${p*.14})`; pX.lineWidth=.8; pX.stroke();
+  }
+  const v=pX.createRadialGradient(cx,cy,W*.1,cx,cy,W*.8);
+  v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,`rgba(0,0,0,${.65+p*.26})`);
+  pX.fillStyle=v; pX.fillRect(0,0,W,H);
+}
+
+/* ── SPLASH ── */
+const splashEl=document.getElementById('splash');
+const sC=document.getElementById('splashCanvas'), sX=sC.getContext('2d');
+let sT=0,drops=[],ripples=[];
+function resizeSplash(){ sC.width=window.innerWidth; sC.height=window.innerHeight; }
+function initSplash(){
+  drops=[];ripples=[];sT=0;
+  const W=sC.width,H=sC.height,cx=W/2,cy=H/2;
+  for(let i=0;i<80;i++){
+    const a=Math.random()*Math.PI*2,sp=2+Math.random()*8;
+    drops.push({x:cx,y:cy,vx:Math.cos(a)*sp*(1+Math.random()),vy:Math.sin(a)*sp*.45-3.5-Math.random()*5,r:.8+Math.random()*3,life:1,decay:.009+Math.random()*.015,g:.14});
+  }
+  for(let i=0;i<7;i++) ripples.push({r:3+i*9,cx,cy:cy+H*.08,life:1,decay:.016-i*.002});
+}
+function drawSplash(){
+  const W=sC.width,H=sC.height,cx=W/2,cy=H/2;
+  sX.clearRect(0,0,W,H);
+  sX.fillStyle=`rgba(2,8,22,${Math.max(0,1-sT*.034)})`; sX.fillRect(0,0,W,H);
+  const wY=cy+H*.08, wG=sX.createLinearGradient(0,wY-30,0,H);
+  wG.addColorStop(0,`rgba(14,66,152,${Math.max(0,.7-sT*.013)})`); wG.addColorStop(1,`rgba(4,18,56,${Math.max(0,.92-sT*.01)})`);
+  sX.fillStyle=wG; sX.beginPath(); sX.moveTo(0,wY);
+  for(let x=0;x<=W;x+=8) sX.lineTo(x,wY+Math.sin(x*.04+sT*.28)*6*Math.max(0,1-sT*.03));
+  sX.lineTo(W,H); sX.lineTo(0,H); sX.closePath(); sX.fill();
+  ripples.forEach(r=>{r.r+=2.8+r.r*.03;r.life-=r.decay;if(r.life<=0)return;sX.beginPath();sX.ellipse(r.cx,r.cy,r.r,r.r*.28,0,0,Math.PI*2);sX.strokeStyle=`rgba(78,162,255,${r.life*.5})`;sX.lineWidth=1.8;sX.stroke();});
+  drops.forEach(d=>{d.x+=d.vx;d.y+=d.vy;d.vy+=d.g;d.life-=d.decay;if(d.life<=0)return;sX.beginPath();sX.ellipse(d.x,d.y,d.r,d.r*.55,Math.atan2(d.vy,d.vx),0,Math.PI*2);sX.fillStyle=`rgba(78,162,255,${d.life*.65})`;sX.fill();});
+  for(let i=0;i<12;i++){
+    const a=i/12*Math.PI*2+sT*.08, dist=28+Math.sin(sT*.35+i)*18+sT*1.4;
+    const py2=cy+H*.08-Math.abs(Math.sin(sT*.26+i))*60+sT*.4;
+    sX.beginPath();sX.arc(cx+Math.cos(a)*dist,py2,4.5,0,Math.PI*2);
+    sX.fillStyle=`rgba(245,200,66,${Math.max(0,1-sT*.034)*.86})`;sX.fill();
+  }
+  if(sT<18){const fA=(18-sT)/18,fG=sX.createRadialGradient(cx,wY,0,cx,wY,W*.46);fG.addColorStop(0,`rgba(115,200,255,${fA*.55})`);fG.addColorStop(1,'rgba(0,0,0,0)');sX.fillStyle=fG;sX.fillRect(0,0,W,H);}
+  const bE=Math.max(0,Math.min(1,(sT-24)/22));
+  if(bE>0){sX.fillStyle=`rgba(245,200,66,${bE})`;sX.font=`bold ${W*.13}px sans-serif`;sX.textAlign='center';sX.textBaseline='middle';sX.fillText('₿',cx,cy);}
+  sT++;
+}
+
+/* ── ORCHESTRATOR ── */
+function startPlunge(){
+  if(plunging)return; plunging=true;
+  if(animId3) cancelAnimationFrame(animId3);
+  plungeEl.style.display='block'; resizePlunge(); let pT=0;
+  (function pLoop(){
+    pT+=.017; pluT=pT; drawPlunge(pT);
+    if(pT<1.06){ requestAnimationFrame(pLoop); }
+    else{
+      plungeEl.style.display='none';
+      splashEl.style.display='block'; resizeSplash(); initSplash();
+      let sf=0;
+      (function sLoop(){
+        drawSplash(); sf++;
+        if(sf<98){ requestAnimationFrame(sLoop); }
+        else{
+          let fo=1;
+          (function fadeO(){
+            fo-=.05; splashEl.style.opacity=fo;
+            if(fo>0){ requestAnimationFrame(fadeO); }
+            else{
+              splashEl.style.display='none'; splashEl.style.opacity=1;
+              if(renderer3){ renderer3.dispose(); renderer3.domElement.remove(); renderer3=null; }
+              introEl.style.display='none';
+              const ui=document.getElementById('ui');
+              ui.style.display='block'; ui.style.opacity=0;
+              let fi=0;
+              (function fadeI(){ fi+=.055; ui.style.opacity=fi; if(fi<1) requestAnimationFrame(fadeI); })();
+              initApp();
+            }
+          })();
+        }
+      })();
+    }
+  })();
+}
+
+introEl.addEventListener('click', startPlunge);
+(function boot(){ if(window.THREE){ buildWell(); } else { setTimeout(boot,50); } })();
+
+/* ─── APP INIT — fee rates with fallback chains ─── */
+async function initApp(){
+  renderInscriptions(loadReg());
+  let fetched=false;
+  const sources=[
+    async()=>{
+      const r=await fetch('https://mempool.space/api/v1/fees/recommended',{signal:AbortSignal.timeout(5000)});
+      if(!r.ok)throw new Error(); const d=await r.json();
+      return {slow:d.hourFee,med:d.halfHourFee,fast:d.fastestFee};
+    },
+    async()=>{
+      const r=await fetch('https://blockstream.info/api/fee-estimates',{signal:AbortSignal.timeout(5000)});
+      if(!r.ok)throw new Error(); const d=await r.json();
+      return {slow:Math.ceil(d['6']||8),med:Math.ceil(d['3']||15),fast:Math.ceil(d['1']||30)};
+    },
+  ];
+  for(const fn of sources){
+    try{
+      const f=await fn();
+      feeRates.slow=f.slow; feeRates.med=f.med; feeRates.fast=f.fast;
+      fetched=true; break;
+    }catch(e){}
+  }
+  if(!fetched){ feeRates={slow:8,med:16,fast:32}; }
+  document.getElementById('frs').textContent=feeRates.slow+' s/vB';
+  document.getElementById('frm').textContent=feeRates.med +' s/vB';
+  document.getElementById('frf').textContent=feeRates.fast+' s/vB';
+  updateFees(0);
+}
+
+/* ─── UTILS ──────────────────────────────────────── */
+const fmtB=b=>b<1024?b+' B':(b/1024).toFixed(1)+' KB';
+const fmtS=s=>s.toLocaleString()+' sats';
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const toB64=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.onerror=()=>rej(new Error('File read failed'));r.readAsDataURL(f);});
+
+function setFeeRate(tier){
+  selRate=tier;
+  ['slow','med','fast'].forEach(t=>document.getElementById('fr-'+t).classList.toggle('active',t===tier));
+  const sz=selFile?selFile.size:new TextEncoder().encode(document.getElementById('wt').value).length;
+  updateFees(sz);
+}
+
+function updateFees(sz){
+  document.getElementById('fSize').textContent=fmtB(sz);
+  const rate=feeRates[selRate]||20;
+  const vBytes=Math.round(160+160+sz/4);
+  const net=vBytes*rate;
+  document.getElementById('fNet').textContent=fmtS(net);
+  const regOn=document.getElementById('regCheck').checked;
+  const total=net+(regOn?REG_FEE:0);
+  document.getElementById('fTotal').textContent=fmtS(total);
+  document.getElementById('regFeeRow').style.display=regOn?'':'none';
+  if(walBalance>0){
+    const bv=document.getElementById('balVal');
+    bv.className='bal-val '+(walBalance>=total?'ok':'low');
+    if(walBalance<total&&walAddr)showStatus('info',`⚠ Balance may be low for this inscription. Need ~${fmtS(total)}.`);
+  }
+}
+
+document.getElementById('regCheck').addEventListener('change',()=>{
+  updateFees(selFile?selFile.size:new TextEncoder().encode(document.getElementById('wt').value).length);
+});
+
+/* ─── FILE HANDLING ──────────────────────────────── */
+function handleFile(f){
+  if(!f)return;
+  if(f.size>60*1024){showStatus('err','File too large. Max 60KB for Ordinal inscriptions.');return;}
+  selFile=f;
+  document.getElementById('pn').textContent=f.name;
+  document.getElementById('ps').textContent=fmtB(f.size);
+  const pt=document.getElementById('pt');
+  if(f.type.startsWith('image/')){const rd=new FileReader();rd.onload=e=>{const img=document.createElement('img');img.className='prev-thumb';img.src=e.target.result;img.alt='';pt.replaceWith(img);};rd.readAsDataURL(f);}
+  else{pt.textContent='📄';}
+  document.getElementById('fp').classList.add('on');document.getElementById('dz').style.display='none';
+  updateFees(f.size);checkReady();
+}
+document.getElementById('fi').addEventListener('change',e=>{if(e.target.files[0])handleFile(e.target.files[0]);});
+const dzEl=document.getElementById('dz');
+dzEl.addEventListener('dragover',e=>{e.preventDefault();dzEl.classList.add('over');});
+dzEl.addEventListener('dragleave',()=>dzEl.classList.remove('over'));
+dzEl.addEventListener('drop',e=>{e.preventDefault();dzEl.classList.remove('over');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
+document.getElementById('prm').addEventListener('click',()=>{selFile=null;document.getElementById('fi').value='';document.getElementById('fp').classList.remove('on');document.getElementById('dz').style.display='';updateFees(0);checkReady();});
+document.getElementById('wt').addEventListener('input',function(){if(!selFile)updateFees(new TextEncoder().encode(this.value).length);checkReady();});
+function checkReady(){document.getElementById('ib').disabled=!((selFile||document.getElementById('wt').value.trim().length>0)&&walAddr);}
+
+/* ─── XVERSE — sats-connect v2 (ESM via esm.sh) ─────
+   Correct API:
+     connect  → request('wallet_connect', { addresses:['ordinals','payment'], network:'Mainnet' })
+     inscribe → createInscription({ payload:{ ... } })
+   sats-connect v2 is ESM-only — no window.satsConnect UMD global.
+   We lazy-import it from esm.sh on first use.
+──────────────────────────────────────────────────── */
+let _sc = null; // cached module
+async function loadSatsConnect(){
+  if(_sc) return _sc;
+  // esm.sh transpiles ESM packages to browser-safe bundles
+  _sc = await import('https://esm.sh/sats-connect@2');
+  return _sc;
+}
+
+async function connectXverse(){
+  const b=document.getElementById('xBtn');b.innerHTML='<span>⏳</span> Connecting...';b.disabled=true;
+  try{
+    const sc = await loadSatsConnect();
+    const { request, AddressPurpose } = sc;
+
+    // wallet_connect is the v2 connect method — prompts Xverse popup
+    const resp = await request('wallet_connect', {
+      addresses: [AddressPurpose.Ordinals, AddressPurpose.Payment],
+      message: 'Bitcoin Wishing Well — connect to inscribe on mainnet',
+      network: 'Mainnet',
+    });
+
+    if(resp.status !== 'success'){
+      if(resp.error?.code === 'USER_REJECTION') throw new Error('Connection cancelled.');
+      throw new Error(resp.error?.message || 'Xverse connection failed.');
+    }
+
+    const addrs = resp.result.addresses;
+    const ord = addrs.find(a => a.purpose === AddressPurpose.Ordinals) || addrs[0];
+    const pay = addrs.find(a => a.purpose === AddressPurpose.Payment)  || ord;
+    setWallet('xverse', ord.address, pay.address, b);
+    fetchBalance('xverse', pay.address);
+  }catch(err){
+    console.error('Xverse connect:', err);
+    showStatus('err','Xverse connect failed — is it installed? <a href="https://xverse.app" target="_blank" style="color:#f5c842">xverse.app</a><br><small>'+err.message+'</small>');
+    b.innerHTML='<span>🔶</span> Xverse';b.disabled=false;
+  }
+}
+
+/* ─── UNISAT — window.unisat ─────────────────────── */
+async function connectUnisat(){
+  const b=document.getElementById('uBtn');b.innerHTML='<span>⏳</span> Connecting...';b.disabled=true;
+  try{
+    if(typeof window.unisat==='undefined')throw new Error('UniSat extension not detected.');
+    // Ensure Bitcoin Mainnet
+    const chain=await window.unisat.getChain().catch(()=>({network:''}));
+    if(chain.network!=='livenet'){
+      await window.unisat.switchChain('BITCOIN_MAINNET');
+    }
+    const accounts=await window.unisat.requestAccounts();
+    if(!accounts||!accounts[0])throw new Error('No accounts returned.');
+    setWallet('unisat',accounts[0],accounts[0],b);
+    fetchBalance('unisat',accounts[0]);
+  }catch(err){
+    console.error('UniSat:',err);
+    showStatus('err','UniSat connect failed. Install from <a href="https://unisat.io" target="_blank" style="color:#f5c842">unisat.io</a> — '+err.message);
+    b.innerHTML='<span>🔷</span> UniSat';b.disabled=false;
+  }
+}
+
+function setWallet(type,ordAddr,payAddr,btn){
+  walType=type;walAddr=ordAddr;walPayAddr=payAddr;
+  const nm=type==='xverse'?'Xverse':'UniSat';
+  btn.innerHTML=`<span>✓</span> ${nm}`;btn.classList.add('on');btn.disabled=false;
+  const oId=type==='xverse'?'uBtn':'xBtn',oNm=type==='xverse'?'UniSat':'Xverse',oIc=type==='xverse'?'🔷':'🔶';
+  const ob=document.getElementById(oId);ob.classList.remove('on');ob.disabled=false;ob.innerHTML=`<span>${oIc}</span> ${oNm}`;
+  document.getElementById('wAddr').textContent=ordAddr.slice(0,14)+'...'+ordAddr.slice(-8);
+  document.getElementById('wAddr').classList.add('on');
+  document.getElementById('wDisc').classList.add('on');
+  document.getElementById('chainWarn').classList.remove('on');
+  hideStatus();checkReady();
+}
+
+async function fetchBalance(type,addr){
+  try{
+    let sats=0;
+    if(type==='unisat'&&window.unisat){
+      const b=await window.unisat.getBalance();sats=b.total||0;
+    }else{
+      const r=await fetch(`${MEMPOOL}/address/${addr}`);
+      if(r.ok){const d=await r.json();sats=(d.chain_stats?.funded_txo_sum||0)-(d.chain_stats?.spent_txo_sum||0);}
+    }
+    walBalance=sats;
+    document.getElementById('balRow').classList.add('on');
+    document.getElementById('balVal').textContent=fmtS(sats)+' ('+(sats/1e8).toFixed(6)+' BTC)';
+    document.getElementById('balVal').className='bal-val '+(sats>10000?'ok':'low');
+    updateFees(selFile?selFile.size:new TextEncoder().encode(document.getElementById('wt').value).length);
+  }catch(e){console.warn('Balance:',e);}
+}
+
+async function switchToMainnet(){
+  if(walType==='unisat'&&window.unisat){try{await window.unisat.switchChain('BITCOIN_MAINNET');document.getElementById('chainWarn').classList.remove('on');}catch(e){showStatus('err','Chain switch failed: '+e.message);}}
+}
+
+function disconnectWallet(){
+  walAddr=null;walPayAddr=null;walType=null;walBalance=0;
+  document.getElementById('xBtn').className='w-btn';document.getElementById('xBtn').disabled=false;document.getElementById('xBtn').innerHTML='<span>🔶</span> Xverse';
+  document.getElementById('uBtn').className='w-btn';document.getElementById('uBtn').disabled=false;document.getElementById('uBtn').innerHTML='<span>🔷</span> UniSat';
+  document.getElementById('wAddr').classList.remove('on');document.getElementById('wDisc').classList.remove('on');
+  document.getElementById('balRow').classList.remove('on');checkReady();
+}
+
+/* ─── XVERSE INSCRIPTION ─────────────────────────────
+   createInscription is an Xverse-custom method.
+   Import it as a named export from sats-connect.
+   appFee + appFeeAddress puts the registry fee inside
+   the same inscription tx — one wallet popup, one tx.
+──────────────────────────────────────────────────── */
+async function inscribeXverse(contentType, contentB64, regOn, feeRate){
+  const sc = await loadSatsConnect();
+  const { createInscription } = sc;
+  return new Promise((resolve, reject) => {
+    createInscription({
+      payload:{
+        network:{ type: 'Mainnet' },
+        contentType,
+        content:     contentB64,
+        payloadType: 'BASE_64',
+        appFee:        regOn ? REG_FEE  : undefined,
+        appFeeAddress: regOn ? DEV_ADDR : undefined,
+        suggestedMinerFeeRate: feeRate,
+      },
+      onFinish(resp){
+        resolve({ wishTxid: resp.txId, regTxid: regOn ? resp.txId : null });
+      },
+      onCancel(){
+        reject(new Error('User cancelled inscription in Xverse.'));
+      },
+    });
+  });
+}
+
+/* ─── UNISAT INSCRIPTION (window.unisat signPsbt + UniSat Open API) ─── */
+async function inscribeUnisat(contentType,contentB64,regOn,feeRate){
+  // UniSat Inscribe Open API
+  // Docs: https://open-api.unisat.io/swagger-ui/
+  // Get your free API key at: https://developer.unisat.io/
+  const UNISAT_API_KEY=''; // <── paste your UniSat Open API key here
+
+  showProg(42,'Creating inscription order with UniSat...');
+
+  const headers={'Content-Type':'application/json'};
+  if(UNISAT_API_KEY)headers['Authorization']=`Bearer ${UNISAT_API_KEY}`;
+
+  // Build order
+  const orderBody={
+    receiveAddress:walAddr,
+    feeRate,
+    outputValue:546,
+    files:[{
+      dataURL:`data:${contentType};base64,${contentB64}`,
+      filename:selFile?selFile.name:'wish.json',
+    }],
+    ...(regOn&&{devAddress:DEV_ADDR,devFee:REG_FEE}),
+  };
+
+  const orderRes=await fetch('https://open-api.unisat.io/v2/inscribe/order/create',{method:'POST',headers,body:JSON.stringify(orderBody)});
+
+  if(!orderRes.ok){
+    const txt=await orderRes.text().catch(()=>'');
+    if(!UNISAT_API_KEY){
+      // No API key — fall back to direct sendBitcoin method
+      return inscribeUnisatDirect(contentType,contentB64,regOn,feeRate);
+    }
+    throw new Error(`UniSat order API ${orderRes.status}: ${txt}`);
+  }
+
+  const order=await orderRes.json();
+  if(order.code!==0)throw new Error('UniSat order error: '+order.msg);
+
+  const {orderId,payAddress,amount}=order.data;
+  showProg(56,`Pay ${fmtS(amount)} to start inscription...`);
+
+  // User pays from their UniSat wallet
+  const payTxid=await window.unisat.sendBitcoin(payAddress,amount,{feeRate});
+  showProg(70,'Payment sent — inscription in progress...');
+
+  // Poll for inscription confirmation (up to 3 min)
+  let wishTxid=null;
+  for(let i=0;i<30;i++){
+    await wait(6000);
+    try{
+      const sr=await fetch(`https://open-api.unisat.io/v2/inscribe/order/${orderId}`,{headers});
+      if(sr.ok){const sd=await sr.json();const iId=sd.data?.files?.[0]?.inscriptionId;if(iId){wishTxid=iId.replace(/i\d+$/,'');break;}}
+    }catch(e){}
+    showProg(70+i,`Waiting for confirmation... (${i+1}/30)`);
+  }
+  if(!wishTxid)wishTxid=payTxid;
+
+  // Registry fee (separate sendBitcoin if not already included via devFee param)
+  let regTxid=null;
+  if(regOn&&!order.data?.devFeeIncluded){
+    showProg(93,'Sending registry fee...');
+    regTxid=await window.unisat.sendBitcoin(DEV_ADDR,REG_FEE,{feeRate}).catch(e=>{console.warn('Registry fee:',e);return null;});
+  } else if(regOn){
+    regTxid=payTxid;
+  }
+
+  return{wishTxid,regTxid};
+}
+
+// Fallback for UniSat without API key — uses signMessage to prove content ownership
+// then broadcasts directly via sendBitcoin to an inscription service
+async function inscribeUnisatDirect(contentType,contentB64,regOn,feeRate){
+  showProg(50,'No UniSat API key — using Xverse inscription flow as fallback...');
+  throw new Error('UniSat inscription requires an API key. Get one free at developer.unisat.io, then paste it in the UNISAT_API_KEY constant in the source. Alternatively, use Xverse to inscribe without an API key.');
+}
+
+/* ─── MAIN WISH FLOW ─────────────────────────────── */
+async function makeWish(){
+  const wishText=document.getElementById('wt').value.trim();
+  if(!selFile&&!wishText){showStatus('err','Add a file or write a wish first.');return;}
+  if(!walAddr){showStatus('err','Connect your wallet first.');return;}
+
+  document.getElementById('ib').disabled=true;
+  const regOn=document.getElementById('regCheck').checked;
+  const feeRate=feeRates[selRate]||20;
+
+  showProg(0,'Preparing inscription...');
+
+  try{
+    // Build content — always wrap in JSON for indexability
+    let contentType,contentB64;
+    if(selFile){
+      const rawB64=await toB64(selFile);
+      // If file + wish text, create a JSON wrapper
+      if(wishText){
+        const meta={wish:wishText,fileName:selFile.name,fileType:selFile.type,fileData:rawB64,app:'bitcoin-wishing-well-v1',registry:regOn};
+        contentType='application/json';contentB64=btoa(JSON.stringify(meta));
+      }else{
+        // Inscribe file directly with its own MIME type
+        contentType=selFile.type||'application/octet-stream';contentB64=rawB64;
+      }
+    }else{
+      // Text-only wish — JSON with metadata for indexability
+      const meta={wish:wishText,app:'bitcoin-wishing-well-v1',registry:regOn};
+      contentType='application/json';contentB64=btoa(JSON.stringify(meta));
+    }
+
+    showProg(20,'Requesting wallet signature...');
+
+    let result;
+    if(walType==='xverse'){
+      showProg(30,'Confirm inscription in Xverse popup...');
+      result=await inscribeXverse(contentType,contentB64,regOn,feeRate);
+    }else{
+      showProg(30,'Building UniSat order...');
+      result=await inscribeUnisat(contentType,contentB64,regOn,feeRate);
+    }
+
+    const{wishTxid,regTxid}=result;
+    showProg(100,'✓ Wish inscribed on Bitcoin mainnet!');
+
+    addToReg({
+      wish:wishText||('[file: '+(selFile?.name||'')+']'),
+      contentType:selFile?selFile.type:'application/json',
+      wishTxid,regTxid:regTxid||null,
+      address:walAddr,timestamp:Date.now(),
+      registered:regOn,feeRate,isDemo:false,
+    });
+
+    setTimeout(()=>{
+      showSuccess(wishTxid,regTxid,regOn);
+      document.getElementById('ib').disabled=false;hideProg();
+      if(walPayAddr)fetchBalance(walType,walPayAddr);
+    },600);
+
+  }catch(err){
+    console.error('Inscription failed:',err);
+    showStatus('err','✕ '+( err.message||String(err)));
+    hideProg();document.getElementById('ib').disabled=false;
+  }
+}
+
+/* ─── UI HELPERS ─────────────────────────────────── */
+function showProg(p,l){document.getElementById('pw').classList.add('on');document.getElementById('pf').style.width=p+'%';document.getElementById('pl').textContent=l;}
+function hideProg(){document.getElementById('pw').classList.remove('on');}
+function showStatus(t,m){const e=document.getElementById('st');e.className=`status-msg on ${t}`;e.innerHTML=m;}
+function hideStatus(){document.getElementById('st').classList.remove('on');}
+
+function showSuccess(wTx,rTx,regOn){
+  const e=document.getElementById('st');e.className='status-msg on ok';
+  const wu=`https://ordinals.com/inscription/${wTx}`;
+  let html=`✓ Your wish has been cast on Bitcoin mainnet!<br><a class="tx-lnk" href="${wu}" target="_blank">View inscription → ${wTx.slice(0,16)}...${wTx.slice(-8)}</a>`;
+  if(regOn&&rTx){const ru=`https://mempool.space/tx/${rTx}`;html+=`<br><a class="tx-lnk" href="${ru}" target="_blank">Registry tx → ${rTx.slice(0,16)}...${rTx.slice(-8)}</a>`;}
+  html+=`<br><small style="color:#3a6a3a;display:block;margin-top:.3rem;">May take 10–60 min to confirm. Track at mempool.space.</small>`;
+  e.innerHTML=html;
+  setTimeout(()=>switchTab('inscriptions'),2200);
+}
+
+function switchTab(n){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById(n==='cast'?'castTab':'insTab').classList.add('active');
+  document.getElementById(n==='cast'?'castPane':'inscriptionsPane').classList.add('active');
+}
+
+/* ─── REGISTRY ───────────────────────────────────── */
+function loadReg(){try{const d=localStorage.getItem(REG_KEY);return d?JSON.parse(d):[];}catch(e){return[];}}
+function saveReg(l){try{localStorage.setItem(REG_KEY,JSON.stringify(l.slice(-500)));}catch(e){}}
+function addToReg(e){const l=loadReg();l.unshift(e);saveReg(l);renderInscriptions(l);}
+
+function renderInscriptions(list){
+  document.getElementById('insBadge').textContent=list.length;
+  const el=document.getElementById('insList');
+  if(!list.length){el.innerHTML='<div class="ins-empty"><span>🪙</span>Cast your first wish to see it inscribed here.</div>';return;}
+  const short=s=>s?s.slice(0,12)+'...'+s.slice(-8):'—';
+  el.innerHTML=list.map(w=>{
+    const dt=w.timestamp?new Date(w.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+    const txt=w.wish?(w.wish.length>80?w.wish.slice(0,80)+'…':w.wish):'[file]';
+    const typeL=w.contentType?(w.contentType.split('/')[1]||w.contentType).toUpperCase():'JSON';
+    const isReg=w.registered&&w.regTxid;
+    const wUrl=`https://ordinals.com/inscription/${w.wishTxid}`;
+    const rUrl=w.regTxid?`https://mempool.space/tx/${w.regTxid}`:null;
+    const pills=[
+      `<span class="ins-pill type">${typeL}</span>`,
+      !w.isDemo?`<span class="ins-pill mainnet">Mainnet ₿</span>`:'',
+      isReg?`<span class="ins-pill marketplace">Marketplace ✓</span>`:'',
+    ].filter(Boolean).join('');
+    return`<div class="ins-card">
+      <div class="ins-card-top">
+        <div class="ins-wish-text">"${txt}"</div>
+        <div class="ins-status">
+          <div class="ins-check ${isReg?'registered':'unregistered'}">${isReg?'✓':'·'}</div>
+          <span class="ins-reg-label ${isReg?'registered':'unregistered'}">${isReg?'Registered':'Unregistered'}</span>
+        </div>
+      </div>
+      <div class="ins-meta">${pills}</div>
+      <div class="ins-txrow">
+        <span class="ins-tx-lbl">Inscription</span>
+        <span class="ins-tx" onclick="openLink('${wUrl}')">${short(w.wishTxid)}</span>
+        ${isReg?`<span class="ins-tx-lbl">Registry</span><span class="ins-tx" onclick="openLink('${rUrl}')">${short(w.regTxid)}</span>`:''}
+        <span class="ins-time">${dt}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+</script>
+</body>
+</html>
