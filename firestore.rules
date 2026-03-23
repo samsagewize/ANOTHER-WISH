@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: inscriptions
+    // Document ID: wishTxid (unique)
+    // Fields:
+    //   - wish: string (required, < 1000 chars)
+    //   - contentType: string (required)
+    //   - wishTxid: string (required)
+    //   - regTxid: string (optional)
+    //   - address: string (required)
+    //   - timestamp: number (required)
+    //   - registered: bool (required)
+    //   - feeRate: number (required)
+    //   - status: string (required)
+    //   - creatorUid: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isValidInscription(data) {
+      return data.wish is string && data.wish.size() <= 1000 &&
+             data.contentType is string &&
+             data.wishTxid is string &&
+             (data.regTxid == null || data.regTxid is string) &&
+             data.address is string &&
+             data.timestamp is number &&
+             data.registered is bool &&
+             data.feeRate is number &&
+             data.status is string &&
+             data.creatorUid is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /inscriptions/{inscriptionId} {
+      // Publicly readable for the gallery
+      allow read: if true;
+
+      // Anyone can cast a wish as long as it's valid and unique (wishTxid as doc ID)
+      allow create: if isValidInscription(request.resource.data);
+
+      // Wishes are eternal - no updates or deletions allowed
+      allow update, delete: if false;
+    }
+
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
