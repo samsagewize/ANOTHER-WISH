@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: inscriptions
+    // Document ID: wishTxid (unique)
+    // Fields:
+    //   - wish: string (required, < 1000 chars)
+    //   - contentType: string (required)
+    //   - wishTxid: string (required)
+    //   - regTxid: string (optional)
+    //   - address: string (required)
+    //   - timestamp: number (required)
+    //   - registered: bool (required)
+    //   - feeRate: number (required)
+    //   - status: string (required)
+    //   - creatorUid: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(creatorUid) {
+      return isAuthenticated() && request.auth.uid == creatorUid;
+    }
+
+    function isValidInscription(data) {
+      return data.wish is string && data.wish.size() <= 1000 &&
+             data.contentType is string &&
+             data.wishTxid is string &&
+             (data.regTxid == null || data.regTxid is string) &&
+             data.address is string &&
+             data.timestamp is number &&
+             data.registered is bool &&
+             data.feeRate is number &&
+             data.status is string &&
+             data.creatorUid is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /inscriptions/{inscriptionId} {
+      // Publicly readable for the gallery
+      allow read: if true;
+
+      // Authenticated users can create inscriptions
+      allow create: if isAuthenticated() && 
+                      isValidInscription(request.resource.data) &&
+                      request.resource.data.creatorUid == request.auth.uid;
+
+      // Only the creator can update their inscription (e.g., status updates)
+      allow update: if isOwner(resource.data.creatorUid) &&
+                      isValidInscription(request.resource.data) &&
+                      request.resource.data.creatorUid == resource.data.creatorUid;
+      
+      allow delete: if false; // No deletions for eternal wishes
+    }
+
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
