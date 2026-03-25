@@ -1,0 +1,31 @@
+{
+  "entities": {
+    "Inscription": {
+      "title": "Inscription",
+      "description": "A Bitcoin ordinal inscription wish.",
+      "type": "object",
+      "properties": {
+        "wish": { "type": "string", "description": "The text of the wish." },
+        "contentType": { "type": "string", "description": "The MIME type of the inscription." },
+        "wishTxid": { "type": "string", "description": "The transaction ID of the wish inscription." },
+        "regTxid": { "type": "string", "description": "The transaction ID of the registry payment, if any." },
+        "address": { "type": "string", "description": "The ordinal address of the creator." },
+        "timestamp": { "type": "number", "description": "Creation timestamp." },
+        "registered": { "type": "boolean", "description": "Whether the wish is registered for the marketplace." },
+        "feeRate": { "type": "number", "description": "The fee rate used for the inscription." },
+        "status": { "type": "string", "description": "Status of the inscription (e.g., pending, confirmed)." }
+      },
+      "required": ["wish", "contentType", "wishTxid", "address", "timestamp", "registered", "feeRate", "status"]
+    }
+  },
+  "firestore": {
+    "/inscriptions/{inscriptionId}": {
+      "schema": "Inscription",
+      "description": "Global collection of all wishes cast in the well."
+    },
+    "/registry/{inscriptionId}": {
+      "schema": "Inscription",
+      "description": "Collection of wishes registered for the future marketplace."
+    }
+  }
+}
