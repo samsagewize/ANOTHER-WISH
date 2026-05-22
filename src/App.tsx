@@ -2,24 +2,30 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   AlertTriangle,
+  AtSign,
   Check,
   Clock,
+  Code2,
   Coins,
   ExternalLink,
   FileText,
   History,
   Image as ImageIcon,
   LogOut,
+  MessageCircle,
+  Music,
+  Palette,
   RefreshCw,
   Search,
+  Send,
   ShieldCheck,
   Upload,
   User,
   Wallet,
   X,
 } from 'lucide-react';
-import { FeeRates, FeeTier, Inscription, WalletType } from './types';
-import { DEV_ADDR, REG_FEE, fetchBalance, fetchFeeRates, fetchTxStatus, loadSatsConnect, toB64 } from './services/bitcoinService';
+import { ChatMessage, FeeRates, FeeTier, Inscription, Profile, WalletType } from './types';
+import { DEV_ADDR, SERVICE_FEE, fetchBalance, fetchFeeRates, fetchTxStatus, loadSatsConnect, toB64 } from './services/bitcoinService';
 import { OperationType, auth, collection, db, doc, handleFirestoreError, limit, onSnapshot, orderBy, query, setDoc, updateDoc } from './firebase';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 
@@ -34,8 +40,11 @@ export default function App() {
   const [feeRates, setFeeRates] = useState<FeeRates>({ slow: 1, med: 2, fast: 4 });
   const [selRate, setSelRate] = useState<FeeTier>('med');
   const [customRate, setCustomRate] = useState(10);
-  const [regOn, setRegOn] = useState(true);
   const [wallet, setWallet] = useState<{ type: WalletType; ordAddr: string; payAddr: string; balance: number } | null>(null);
+  const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+  const [profileDraft, setProfileDraft] = useState({ displayName: '', twitterUrl: '', bio: '' });
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatText, setChatText] = useState('');
   const [status, setStatus] = useState<{ type: 'ok' | 'err' | 'info'; msg: string } | null>(null);
   const [progress, setProgress] = useState<{ p: number; l: string } | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -66,9 +75,29 @@ export default function App() {
       handleFirestoreError(err, OperationType.LIST, 'inscriptions');
     });
 
+    const profileSnap = onSnapshot(collection(db, 'profiles'), (snapshot) => {
+      const next: Record<string, Profile> = {};
+      snapshot.docs.forEach((d) => {
+        const profile = d.data() as Profile;
+        next[profile.address] = profile;
+      });
+      setProfiles(next);
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'profiles');
+    });
+
+    const messagesQ = query(collection(db, 'messages'), orderBy('timestamp', 'desc'), limit(80));
+    const messageSnap = onSnapshot(messagesQ, (snapshot) => {
+      setChatMessages(snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ChatMessage, 'id'>) })));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'messages');
+    });
+
     return () => {
       unsubAuth();
       unsubSnap();
+      profileSnap();
+      messageSnap();
     };
   }, []);
 
@@ -82,13 +111,6 @@ export default function App() {
           const newStatus = await fetchTxStatus(ins.wishTxid);
           if (newStatus !== ins.status) {
             await updateDoc(doc(db, 'inscriptions', ins.wishTxid), { status: newStatus });
-            if (ins.registered) {
-              try {
-                await updateDoc(doc(db, 'registry', ins.wishTxid), { status: newStatus });
-              } catch {
-                // The registry record may not exist for older inscriptions.
-              }
-            }
           }
         } catch (e) {
           console.error('Status check failed for', ins.wishTxid, e);
@@ -101,11 +123,25 @@ export default function App() {
     return () => clearInterval(timer);
   }, [inscriptions]);
 
+  useEffect(() => {
+    if (!wallet) {
+      setProfileDraft({ displayName: '', twitterUrl: '', bio: '' });
+      return;
+    }
+
+    const profile = profiles[wallet.ordAddr];
+    setProfileDraft({
+      displayName: profile?.displayName || '',
+      twitterUrl: profile?.twitterUrl || '',
+      bio: profile?.bio || '',
+    });
+  }, [profiles, wallet]);
+
   const currentRate = selRate === 'custom' ? customRate : feeRates[selRate];
   const contentBytes = selFile ? selFile.size : new TextEncoder().encode(wishText).length;
   const vBytes = Math.max(160, Math.round(320 + contentBytes / 4));
   const netFee = vBytes * currentRate;
-  const totalFee = netFee + (regOn ? REG_FEE : 0);
+  const totalFee = netFee + SERVICE_FEE;
   const canInscribe = Boolean(wallet && (selFile || wishText.trim()) && !progress);
 
   const walletInscriptions = useMemo(() => {
@@ -124,7 +160,7 @@ export default function App() {
     ));
   }, [historySearch, walletInscriptions]);
 
-  const recentPublic = useMemo(() => inscriptions.slice(0, 6), [inscriptions]);
+  const publicGallery = useMemo(() => inscriptions, [inscriptions]);
   const confirmedCount = walletInscriptions.filter((ins) => ins.status === 'confirmed').length;
   const pendingCount = walletInscriptions.filter((ins) => ins.status === 'pending' || !ins.status).length;
 
@@ -188,6 +224,53 @@ export default function App() {
     setStatus(null);
   };
 
+  const saveProfile = async () => {
+    if (!wallet) {
+      setShowWalletSelect(true);
+      return;
+    }
+
+    const twitterUrl = profileDraft.twitterUrl.trim();
+    if (twitterUrl && !/^https:\/\/(x\.com|twitter\.com)\/[A-Za-z0-9_]{1,15}\/?$/.test(twitterUrl)) {
+      setStatus({ type: 'err', msg: 'Use a valid X/Twitter profile link like https://x.com/username.' });
+      return;
+    }
+
+    const profile: Profile = {
+      address: wallet.ordAddr,
+      displayName: profileDraft.displayName.trim() || `${wallet.ordAddr.slice(0, 6)}...${wallet.ordAddr.slice(-4)}`,
+      twitterUrl,
+      bio: profileDraft.bio.trim(),
+      verifiedAt: profiles[wallet.ordAddr]?.verifiedAt || Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    await setDoc(doc(db, 'profiles', wallet.ordAddr), profile);
+    setStatus({ type: 'ok', msg: 'Profile saved. Your Twitter link is now attached to this ordinal wallet.' });
+  };
+
+  const sendMessage = async () => {
+    if (!wallet) {
+      setShowWalletSelect(true);
+      return;
+    }
+
+    const text = chatText.trim();
+    if (!text) return;
+    if (text.length > 280) {
+      setStatus({ type: 'err', msg: 'Museum chat messages must be 280 characters or less.' });
+      return;
+    }
+
+    const messageRef = doc(collection(db, 'messages'));
+    await setDoc(messageRef, {
+      address: wallet.ordAddr,
+      text,
+      timestamp: Date.now(),
+    });
+    setChatText('');
+  };
+
   const executeInscribe = async () => {
     if (!wallet) {
       setShowWalletSelect(true);
@@ -208,7 +291,7 @@ export default function App() {
             fileType: selFile.type,
             fileData: rawB64,
             app: 'bitcoin-wishing-well-v2',
-            registry: regOn,
+            serviceFee: SERVICE_FEE,
           };
           contentType = 'application/json';
           contentB64 = btoa(JSON.stringify(meta));
@@ -234,11 +317,11 @@ export default function App() {
               contentType,
               content: contentB64,
               payloadType: 'BASE_64',
-              appFee: regOn ? REG_FEE : undefined,
-              appFeeAddress: regOn ? DEV_ADDR : undefined,
+              appFee: SERVICE_FEE,
+              appFeeAddress: DEV_ADDR,
               suggestedMinerFeeRate: currentRate,
             },
-            onFinish: (resp: any) => resolve({ wishTxid: resp.txId, regTxid: regOn ? resp.txId : null }),
+            onFinish: (resp: any) => resolve({ wishTxid: resp.txId, regTxid: null }),
             onCancel: () => reject(new Error('Cancelled')),
           });
         });
@@ -253,7 +336,7 @@ export default function App() {
         regTxid: result.regTxid,
         address: wallet.ordAddr,
         timestamp: Date.now(),
-        registered: regOn,
+        serviceFee: SERVICE_FEE,
         feeRate: currentRate,
         status: 'pending',
         creatorUid: wallet.ordAddr,
@@ -264,9 +347,6 @@ export default function App() {
 
       try {
         await setDoc(doc(db, 'inscriptions', newIns.wishTxid), newIns);
-        if (newIns.registered) {
-          await setDoc(doc(db, 'registry', newIns.wishTxid), newIns);
-        }
 
         await fetch('/api/track', {
           method: 'POST',
@@ -352,11 +432,17 @@ export default function App() {
                   Inscribe Forever
                 </h1>
                 <p className="mt-4 max-w-xl text-[1rem] leading-8 text-[#b89655]">
-                  A cleaner home for putting text, art, and small files on Bitcoin, then finding every inscription again from your connected wallet profile.
+                  The home for inscribing code, images, songs, and art on Bitcoin, then building a social museum around your ordinal wallet.
                 </p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Pill icon={<Code2 size={13} />} label="Code" />
+                  <Pill icon={<ImageIcon size={13} />} label="Images" />
+                  <Pill icon={<Music size={13} />} label="Songs" />
+                  <Pill icon={<Palette size={13} />} label="Art" />
+                </div>
 
                 <div className="mt-7 grid gap-3 sm:grid-cols-3">
-                  <Stat label="Recent" value={inscriptions.length.toString()} />
+                  <Stat label="Museum" value={inscriptions.length.toString()} />
                   <Stat label="Your history" value={wallet ? walletInscriptions.length.toString() : '--'} />
                   <Stat label="Fee rate" value={`${currentRate} s/vB`} />
                 </div>
@@ -376,12 +462,16 @@ export default function App() {
           <aside className="grid gap-4">
             <ProfileSummary
               wallet={wallet}
+              profile={wallet ? profiles[wallet.ordAddr] : undefined}
+              draft={profileDraft}
               total={walletInscriptions.length}
               confirmed={confirmedCount}
               pending={pendingCount}
               balance={wallet?.balance || 0}
               onConnect={() => setShowWalletSelect(true)}
               onRefresh={refreshBalance}
+              onDraft={setProfileDraft}
+              onSave={saveProfile}
             />
             <SafetyPanel />
           </aside>
@@ -406,7 +496,6 @@ export default function App() {
                 feeRates={feeRates}
                 selRate={selRate}
                 customRate={customRate}
-                regOn={regOn}
                 wallet={wallet}
                 status={status}
                 progress={progress}
@@ -419,7 +508,6 @@ export default function App() {
                 onWishText={setWishText}
                 onSelRate={setSelRate}
                 onCustomRate={setCustomRate}
-                onRegOn={setRegOn}
                 onConnect={() => setShowWalletSelect(true)}
                 onDisconnect={disconnectWallet}
                 onInscribe={handleInscribe}
@@ -433,13 +521,23 @@ export default function App() {
                 onSearch={setHistorySearch}
                 onCast={() => setTab('inscribe')}
                 onConnect={() => setShowWalletSelect(true)}
+                profiles={profiles}
               />
             )}
           </div>
 
           <div className="grid gap-5">
-            <RecentInscriptions inscriptions={recentPublic} />
+            <MuseumGallery inscriptions={publicGallery} profiles={profiles} />
             <HowItWorks />
+            <MuseumChat
+              wallet={wallet}
+              profiles={profiles}
+              messages={chatMessages}
+              text={chatText}
+              onText={setChatText}
+              onSend={sendMessage}
+              onConnect={() => setShowWalletSelect(true)}
+            />
           </div>
         </section>
       </main>
@@ -468,7 +566,6 @@ export default function App() {
             currentRate={currentRate}
             netFee={netFee}
             totalFee={totalFee}
-            regOn={regOn}
             onCancel={() => setShowConfirm(false)}
             onConfirm={() => {
               setShowConfirm(false);
@@ -490,14 +587,26 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ProfileSummary({ wallet, total, confirmed, pending, balance, onConnect, onRefresh }: {
+function Pill({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-[#3a2808] bg-black/30 px-3 py-1 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#c9a040]">
+      {icon} {label}
+    </span>
+  );
+}
+
+function ProfileSummary({ wallet, profile, draft, total, confirmed, pending, balance, onConnect, onRefresh, onDraft, onSave }: {
   wallet: { type: WalletType; ordAddr: string; payAddr: string; balance: number } | null;
+  profile?: Profile;
+  draft: { displayName: string; twitterUrl: string; bio: string };
   total: number;
   confirmed: number;
   pending: number;
   balance: number;
   onConnect: () => void;
   onRefresh: () => void;
+  onDraft: (next: { displayName: string; twitterUrl: string; bio: string }) => void;
+  onSave: () => void;
 }) {
   return (
     <div className="rounded-2xl border border-[#3a2808] bg-[#100904]/88 p-5">
@@ -509,14 +618,42 @@ function ProfileSummary({ wallet, total, confirmed, pending, balance, onConnect,
       {wallet ? (
         <>
           <div className="rounded-xl border border-[#2a1808] bg-black/30 p-3">
-            <div className="font-cinzel text-[0.58rem] uppercase tracking-widest text-[#6f501f]">Connected wallet</div>
+            <div className="font-cinzel text-[0.58rem] uppercase tracking-widest text-[#6f501f]">Ordinal wallet museum card</div>
             <div className="mt-1 break-all font-mono text-[0.74rem] text-[#c9a040]">{wallet.ordAddr}</div>
+            {profile?.twitterUrl && (
+              <a href={profile.twitterUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-[0.72rem] text-[#f5c842] hover:underline">
+                <AtSign size={13} /> Linked Twitter
+              </a>
+            )}
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <MiniStat label="Balance" value={`${balance.toLocaleString()} sats`} />
             <MiniStat label="History" value={total.toString()} />
             <MiniStat label="Confirmed" value={confirmed.toString()} />
             <MiniStat label="Pending" value={pending.toString()} />
+          </div>
+          <div className="mt-3 space-y-2 rounded-xl border border-[#2a1808] bg-black/25 p-3">
+            <input
+              value={draft.displayName}
+              onChange={(e) => onDraft({ ...draft, displayName: e.target.value })}
+              placeholder="Display name"
+              className="w-full rounded-lg border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]"
+            />
+            <input
+              value={draft.twitterUrl}
+              onChange={(e) => onDraft({ ...draft, twitterUrl: e.target.value })}
+              placeholder="https://x.com/username"
+              className="w-full rounded-lg border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]"
+            />
+            <textarea
+              value={draft.bio}
+              onChange={(e) => onDraft({ ...draft, bio: e.target.value })}
+              placeholder="Short museum bio"
+              className="h-20 w-full resize-none rounded-lg border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]"
+            />
+            <button onClick={onSave} className="w-full rounded-lg bg-[#f5c842] px-3 py-2 font-cinzel text-[0.65rem] font-bold uppercase tracking-widest text-black">
+              Save Twitter Link
+            </button>
           </div>
         </>
       ) : (
@@ -549,8 +686,8 @@ function SafetyPanel() {
       </h2>
       <ul className="space-y-3 text-sm leading-6 text-[#9c793c]">
         <li>Review the wallet prompt before signing. Bitcoin inscriptions are permanent.</li>
-        <li>Keep files small. Smaller inscriptions are cheaper and easier to confirm.</li>
-        <li>Your profile history is keyed to the connected ordinal address.</li>
+        <li>Use this for code, images, songs, and art that you want preserved on Bitcoin.</li>
+        <li>Your profile history and museum chat are keyed to the connected ordinal address.</li>
       </ul>
     </div>
   );
@@ -562,7 +699,6 @@ function InscribePanel(props: {
   feeRates: FeeRates;
   selRate: FeeTier;
   customRate: number;
-  regOn: boolean;
   wallet: { type: WalletType; ordAddr: string; payAddr: string; balance: number } | null;
   status: { type: 'ok' | 'err' | 'info'; msg: string } | null;
   progress: { p: number; l: string } | null;
@@ -575,7 +711,6 @@ function InscribePanel(props: {
   onWishText: (value: string) => void;
   onSelRate: (value: FeeTier) => void;
   onCustomRate: (value: number) => void;
-  onRegOn: (value: boolean) => void;
   onConnect: () => void;
   onDisconnect: () => void;
   onInscribe: () => void;
@@ -585,7 +720,7 @@ function InscribePanel(props: {
       <div>
         <div className="mb-5">
           <h2 className="font-cinzel-decorative text-2xl tracking-widest text-[#f5c842]">Inscribe</h2>
-          <p className="mt-2 text-sm leading-6 text-[#9c793c]">Write a wish, upload art, or combine both into one Bitcoin inscription.</p>
+          <p className="mt-2 text-sm leading-6 text-[#9c793c]">Inscribe code, images, songs, writing, and art directly to Bitcoin.</p>
         </div>
 
         {!props.selFile ? (
@@ -593,7 +728,7 @@ function InscribePanel(props: {
             <input type="file" onChange={(e) => e.target.files?.[0] && props.onFile(e.target.files[0])} className="absolute inset-0 cursor-pointer opacity-0" />
             <Upload className="mx-auto mb-3 text-[#c9a040]" size={30} />
             <div className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#d8b55b]">Upload content</div>
-            <p className="mt-2 text-sm leading-6 text-[#7a5a25]">PNG, JPG, GIF, WEBP, TXT, JSON, HTML, or MD. Max 60KB.</p>
+            <p className="mt-2 text-sm leading-6 text-[#7a5a25]">PNG, JPG, GIF, WEBP, MP3, WAV, HTML, CSS, JS, JSON, TXT, MD. Max 60KB.</p>
           </label>
         ) : (
           <div className="mb-4 flex items-center gap-3 rounded-2xl border border-[#3a2808] bg-black/25 p-4">
@@ -633,13 +768,10 @@ function InscribePanel(props: {
           )}
         </div>
 
-        <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-[#342208] bg-[#f5c842]/[0.035] p-4 transition hover:border-[#5a3818]">
-          <input type="checkbox" checked={props.regOn} onChange={(e) => props.onRegOn(e.target.checked)} className="mt-1 accent-[#f5c842]" />
-          <span>
-            <span className="block font-cinzel text-[0.78rem] text-[#c9a040]">Add to Wishing Well registry <span className="ml-1 rounded border border-[#f5c842]/25 bg-[#f5c842]/10 px-1.5 text-[0.6rem] text-[#f5c842]">+2,000 sats</span></span>
-            <span className="mt-1 block text-sm leading-6 text-[#7a5a25]">Makes the inscription easier to display in profile history and future marketplace features.</span>
-          </span>
-        </label>
+        <div className="mb-4 rounded-2xl border border-[#342208] bg-[#f5c842]/[0.035] p-4">
+          <span className="block font-cinzel text-[0.78rem] text-[#c9a040]">Service fee <span className="ml-1 rounded border border-[#f5c842]/25 bg-[#f5c842]/10 px-1.5 text-[0.6rem] text-[#f5c842]">+{SERVICE_FEE.toLocaleString()} sats</span></span>
+          <span className="mt-1 block text-sm leading-6 text-[#7a5a25]">Supports hosting the public inscription museum, profile history, and social features.</span>
+        </div>
 
         {props.status && (
           <div className={`mb-4 rounded-xl border p-3 text-sm leading-6 ${props.status.type === 'ok' ? 'border-[#285028] bg-[#286428]/10 text-[#70c070]' : props.status.type === 'err' ? 'border-[#502020] bg-[#641e1e]/10 text-[#dd7070]' : 'border-[#3a2808] bg-[#3c1e05]/10 text-[#a08040]'}`}>
@@ -653,7 +785,7 @@ function InscribePanel(props: {
         <div className="space-y-3 text-sm">
           <ReviewLine label="Content size" value={`${props.contentBytes.toLocaleString()} B`} />
           <ReviewLine label="Network fee" value={`${props.netFee.toLocaleString()} sats`} />
-          {props.regOn && <ReviewLine label="Registry" value={`${REG_FEE.toLocaleString()} sats`} />}
+          <ReviewLine label="Service fee" value={`${SERVICE_FEE.toLocaleString()} sats`} />
           <div className="border-t border-[#2a1808] pt-3">
             <ReviewLine label="Estimated total" value={`${props.totalFee.toLocaleString()} sats`} strong />
           </div>
@@ -700,11 +832,12 @@ function ReviewLine({ label, value, strong }: { label: string; value: string; st
   );
 }
 
-function HistoryPanel({ wallet, search, inscriptions, total, onSearch, onCast, onConnect }: {
+function HistoryPanel({ wallet, search, inscriptions, total, profiles, onSearch, onCast, onConnect }: {
   wallet: { type: WalletType; ordAddr: string; payAddr: string; balance: number } | null;
   search: string;
   inscriptions: Inscription[];
   total: number;
+  profiles: Record<string, Profile>;
   onSearch: (value: string) => void;
   onCast: () => void;
   onConnect: () => void;
@@ -743,7 +876,7 @@ function HistoryPanel({ wallet, search, inscriptions, total, onSearch, onCast, o
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {inscriptions.map((ins) => (
             <React.Fragment key={ins.wishTxid}>
-              <InscriptionCard ins={ins} />
+              <InscriptionCard ins={ins} profile={profiles[ins.address]} />
             </React.Fragment>
           ))}
         </div>
@@ -752,27 +885,36 @@ function HistoryPanel({ wallet, search, inscriptions, total, onSearch, onCast, o
   );
 }
 
-function RecentInscriptions({ inscriptions }: { inscriptions: Inscription[] }) {
+function MuseumGallery({ inscriptions, profiles }: { inscriptions: Inscription[]; profiles: Record<string, Profile> }) {
   return (
     <section className="rounded-2xl border border-[#3a2808] bg-[#100904]/88 p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">Recent Inscriptions</h2>
-        <Clock size={16} className="text-[#7a5a25]" />
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">On-Chain Museum</h2>
+          <p className="mt-1 text-sm text-[#7a5a25]">All inscriptions created on this website. Open any piece to view it on-chain.</p>
+        </div>
+        <Clock size={16} className="shrink-0 text-[#7a5a25]" />
       </div>
       {!inscriptions.length ? (
-        <p className="rounded-xl border border-dashed border-[#2a1808] bg-black/25 p-5 text-center text-sm text-[#7a5a25]">Recent inscriptions will appear here.</p>
+        <p className="rounded-xl border border-dashed border-[#2a1808] bg-black/25 p-5 text-center text-sm text-[#7a5a25]">Inscriptions created here will appear in the museum.</p>
       ) : (
-        <div className="space-y-3">
+        <div className="max-h-[820px] space-y-3 overflow-y-auto pr-1">
           {inscriptions.map((ins) => (
             <div key={ins.wishTxid} className="flex items-center gap-3 rounded-xl border border-[#2a1808] bg-black/25 p-3">
               <PreviewThumb ins={ins} compact />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm text-[#d4a040]">{ins.wish}</p>
+                <p className="mt-1 truncate text-[0.7rem] text-[#7a5a25]">{profiles[ins.address]?.displayName || `${ins.address.slice(0, 6)}...${ins.address.slice(-4)}`}</p>
                 <p className="mt-1 font-mono text-[0.65rem] text-[#5f4218]">{ins.wishTxid.slice(0, 8)}...{ins.wishTxid.slice(-6)}</p>
               </div>
-              <a href={`https://ord.io/${ins.wishTxid}i0`} target="_blank" rel="noopener noreferrer" className="text-[#7a5a25] transition hover:text-[#f5c842]">
-                <ExternalLink size={14} />
-              </a>
+              <div className="flex flex-col gap-2">
+                <a href={`https://ordinals.com/content/${ins.wishTxid}i0`} target="_blank" rel="noopener noreferrer" className="text-[#7a5a25] transition hover:text-[#f5c842]" aria-label="View on-chain content">
+                  <ImageIcon size={14} />
+                </a>
+                <a href={`https://ord.io/${ins.wishTxid}i0`} target="_blank" rel="noopener noreferrer" className="text-[#7a5a25] transition hover:text-[#f5c842]" aria-label="View on Ord.io">
+                  <ExternalLink size={14} />
+                </a>
+              </div>
             </div>
           ))}
         </div>
@@ -783,14 +925,16 @@ function RecentInscriptions({ inscriptions }: { inscriptions: Inscription[] }) {
 
 function HowItWorks() {
   const steps = [
-    ['Connect', 'Use Xverse for live inscription support.'],
-    ['Prepare', 'Write text, upload a small file, and choose a fee rate.'],
-    ['Inscribe', 'Confirm in wallet, then track it from your profile.'],
+    ['Connect your Bitcoin wallet', 'Use Xverse for live inscription support, then confirm you are on Bitcoin Mainnet.'],
+    ['Choose what to preserve', 'Upload code, images, songs, HTML, JSON, writing, or art. Smaller files cost less.'],
+    ['Pick fee speed', 'Slow is cheaper. Fast is usually quicker. Custom is for advanced users watching mempool fees.'],
+    ['Review and sign', 'Check network fee, service fee, content type, and wallet prompt before signing.'],
+    ['Visit your museum', 'After submission, your profile history and the public museum show the on-chain inscription link.'],
   ];
 
   return (
     <section className="rounded-2xl border border-[#3a2808] bg-[#100904]/88 p-5">
-      <h2 className="mb-4 font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">How It Works</h2>
+      <h2 className="mb-4 font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">How To Inscribe</h2>
       <div className="grid gap-3">
         {steps.map(([title, body], index) => (
           <div key={title} className="flex gap-3 rounded-xl border border-[#2a1808] bg-black/25 p-3">
@@ -806,7 +950,71 @@ function HowItWorks() {
   );
 }
 
-function InscriptionCard({ ins }: { ins: Inscription }) {
+function MuseumChat({ wallet, profiles, messages, text, onText, onSend, onConnect }: {
+  wallet: { type: WalletType; ordAddr: string; payAddr: string; balance: number } | null;
+  profiles: Record<string, Profile>;
+  messages: ChatMessage[];
+  text: string;
+  onText: (value: string) => void;
+  onSend: () => void;
+  onConnect: () => void;
+}) {
+  return (
+    <section className="rounded-2xl border border-[#3a2808] bg-[#100904]/88 p-5">
+      <h2 className="mb-2 flex items-center gap-2 font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">
+        <MessageCircle size={16} /> Museum Chat
+      </h2>
+      <p className="mb-4 text-sm leading-6 text-[#7a5a25]">Talk with other ordinal wallet profiles. Messages are attached to wallet addresses.</p>
+
+      <div className="mb-4 max-h-[320px] space-y-3 overflow-y-auto rounded-xl border border-[#2a1808] bg-black/25 p-3">
+        {!messages.length ? (
+          <p className="py-8 text-center text-sm text-[#5f4218]">No messages yet. Start the museum wall.</p>
+        ) : (
+          messages.map((msg) => {
+            const profile = profiles[msg.address];
+            return (
+              <div key={msg.id} className="rounded-lg border border-[#2a1808] bg-[#120a04] p-3">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="truncate text-sm font-semibold text-[#d4a040]">{profile?.displayName || `${msg.address.slice(0, 6)}...${msg.address.slice(-4)}`}</span>
+                  {profile?.twitterUrl && (
+                    <a href={profile.twitterUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-[#f5c842]" aria-label="Twitter profile">
+                      <AtSign size={13} />
+                    </a>
+                  )}
+                </div>
+                <p className="text-sm leading-6 text-[#9c793c]">{msg.text}</p>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {wallet ? (
+        <div className="flex gap-2">
+          <input
+            value={text}
+            onChange={(e) => onText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSend();
+            }}
+            placeholder="Leave a museum message..."
+            maxLength={280}
+            className="min-w-0 flex-1 rounded-xl border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]"
+          />
+          <button onClick={onSend} className="rounded-xl bg-[#f5c842] px-3 text-black transition hover:brightness-110" aria-label="Send message">
+            <Send size={16} />
+          </button>
+        </div>
+      ) : (
+        <button onClick={onConnect} className="w-full rounded-xl border border-[#f5c842]/30 bg-[#f5c842]/10 px-4 py-3 font-cinzel text-[0.68rem] font-bold uppercase tracking-widest text-[#f5c842]">
+          Connect to chat
+        </button>
+      )}
+    </section>
+  );
+}
+
+function InscriptionCard({ ins, profile }: { ins: Inscription; profile?: Profile }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-[#2a1a08] bg-gradient-to-br from-[#130e06] to-[#0d0804] transition hover:border-[#5a3a18]">
       <div className="relative aspect-square bg-black/40">
@@ -819,14 +1027,21 @@ function InscriptionCard({ ins }: { ins: Inscription }) {
       <div className="p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <span className="truncate font-cinzel text-[0.54rem] uppercase tracking-widest text-[#7a5a25]">{(ins.contentType.split('/')[1] || ins.contentType).toUpperCase()}</span>
-          {ins.registered && <span className="inline-flex items-center gap-1 text-[0.54rem] uppercase tracking-widest text-[#70c070]"><Check size={9} /> Registry</span>}
+          {ins.serviceFee && <span className="inline-flex items-center gap-1 text-[0.54rem] uppercase tracking-widest text-[#70c070]"><ShieldCheck size={9} /> Site</span>}
+        </div>
+        <div className="mb-2 flex items-center gap-2 text-[0.68rem] text-[#7a5a25]">
+          <User size={12} />
+          <span className="truncate">{profile?.displayName || `${ins.address.slice(0, 6)}...${ins.address.slice(-4)}`}</span>
+          {profile?.twitterUrl && <AtSign size={12} className="text-[#f5c842]" />}
         </div>
         <p className="line-clamp-2 min-h-[40px] text-sm italic leading-5 text-[#d4a040]">"{ins.wish}"</p>
-        <div className="mt-3 flex items-center justify-between border-t border-[#2a1a08] pt-3">
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#2a1a08] pt-3">
+          <a href={`https://ordinals.com/content/${ins.wishTxid}i0`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#c9a040] transition hover:text-[#f5c842]">
+            Content <ExternalLink size={9} />
+          </a>
           <a href={`https://ord.io/${ins.wishTxid}i0`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#c9a040] transition hover:text-[#f5c842]">
             Ord.io <ExternalLink size={9} />
           </a>
-          <span className="text-[0.62rem] text-[#5a4018]">{new Date(ins.timestamp).toLocaleDateString()}</span>
         </div>
       </div>
     </div>
@@ -846,6 +1061,15 @@ function PreviewThumb({ ins, compact }: { ins: Inscription; compact?: boolean })
           (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/bitcoin/400/400?blur=10';
         }}
       />
+    );
+  }
+
+  if (ins.contentType.startsWith('audio/')) {
+    return (
+      <div className={`${size} grid place-items-center bg-[#120a04] p-3 text-center`}>
+        <Music className="mb-1 text-[#c9a040]" size={compact ? 18 : 38} />
+        {!compact && <p className="text-sm italic leading-6 text-[#d4a040]">On-chain audio inscription</p>}
+      </div>
     );
   }
 
@@ -918,7 +1142,6 @@ function ConfirmModal(props: {
   currentRate: number;
   netFee: number;
   totalFee: number;
-  regOn: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -932,7 +1155,7 @@ function ConfirmModal(props: {
           <ReviewLine label="Content" value={props.selFile ? `File: ${props.selFile.name}` : props.wishText ? 'Text inscription' : 'Empty'} />
           <ReviewLine label="Fee rate" value={`${props.currentRate} sats/vB`} />
           <ReviewLine label="Network fee" value={`${props.netFee.toLocaleString()} sats`} />
-          {props.regOn && <ReviewLine label="Registry fee" value={`${REG_FEE.toLocaleString()} sats`} />}
+          <ReviewLine label="Service fee" value={`${SERVICE_FEE.toLocaleString()} sats`} />
           <div className="border-t border-[#3a2808] pt-3">
             <ReviewLine label="Total due" value={`${props.totalFee.toLocaleString()} sats`} strong />
           </div>

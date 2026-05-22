@@ -5,12 +5,29 @@ export interface Inscription {
   regTxid: string | null;
   address: string;
   timestamp: number;
-  registered: boolean;
+  registered?: boolean;
+  serviceFee?: number;
   feeRate: number;
   isDemo?: boolean;
   status?: 'pending' | 'confirmed' | 'failed';
   creatorUid: string;
   contentB64?: string;
+}
+
+export interface Profile {
+  address: string;
+  displayName: string;
+  twitterUrl: string;
+  bio: string;
+  verifiedAt: number;
+  updatedAt: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  address: string;
+  text: string;
+  timestamp: number;
 }
 
 export type FeeTier = 'slow' | 'med' | 'fast' | 'custom';

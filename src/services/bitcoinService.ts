@@ -2,7 +2,7 @@ import { FeeRates, WalletType } from '../types';
 
 const MEMPOOL = 'https://mempool.space/api';
 export const DEV_ADDR = '3FxKYyYJcxn6Tx2RvQM8szTzYKTQYskgWq';
-export const REG_FEE = 2000;
+export const SERVICE_FEE = 2000;
 
 export async function fetchFeeRates(): Promise<FeeRates> {
   try {

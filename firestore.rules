@@ -2,29 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: inscriptions
-    // Document ID: wishTxid (unique)
-    // Fields:
-    //   - wish: string (required, < 1000 chars)
-    //   - contentType: string (required)
-    //   - wishTxid: string (required)
-    //   - regTxid: string (optional)
-    //   - address: string (required)
-    //   - timestamp: number (required)
-    //   - registered: bool (required)
-    //   - feeRate: number (required)
-    //   - status: string (required)
-    //   - creatorUid: string (required)
-    //
-    // ===============================================================
-
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
     function isValidInscription(data) {
       return data.wish is string && data.wish.size() <= 1000 &&
              data.contentType is string &&
@@ -32,38 +9,51 @@ service cloud.firestore {
              (data.regTxid == null || data.regTxid is string) &&
              data.address is string &&
              data.timestamp is number &&
-             data.registered is bool &&
              data.feeRate is number &&
              data.status is string &&
-             data.creatorUid is string;
+             data.creatorUid is string &&
+             (!('serviceFee' in data) || data.serviceFee is number) &&
+             (!('registered' in data) || data.registered is bool);
     }
 
-    // ===============================================================
-    // Rules
-    // ===============================================================
+    function isValidProfile(data, profileId) {
+      return data.address == profileId &&
+             data.address is string &&
+             data.displayName is string &&
+             data.displayName.size() <= 40 &&
+             data.twitterUrl is string &&
+             data.twitterUrl.size() <= 120 &&
+             data.bio is string &&
+             data.bio.size() <= 240 &&
+             data.verifiedAt is number &&
+             data.updatedAt is number;
+    }
+
+    function isValidMessage(data) {
+      return data.address is string &&
+             data.text is string &&
+             data.text.size() > 0 &&
+             data.text.size() <= 280 &&
+             data.timestamp is number;
+    }
 
     match /inscriptions/{inscriptionId} {
-      // Publicly readable for the gallery
       allow read: if true;
-
-      // Cast a wish as long as it's valid and unique (wishTxid as doc ID)
       allow create: if isValidInscription(request.resource.data);
-
-      // Allow updating status field
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
       allow delete: if false;
     }
 
-    match /registry/{inscriptionId} {
-      // Publicly readable for the marketplace
+    match /profiles/{profileId} {
       allow read: if true;
-
-      // Only registered wishes can be added here
-      allow create: if isValidInscription(request.resource.data) && request.resource.data.registered == true;
-
-      // Registry is also eternal, status can be updated
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+      allow create, update: if isValidProfile(request.resource.data, profileId);
       allow delete: if false;
+    }
+
+    match /messages/{messageId} {
+      allow read: if true;
+      allow create: if isValidMessage(request.resource.data);
+      allow update, delete: if false;
     }
 
     match /{path=**} {
