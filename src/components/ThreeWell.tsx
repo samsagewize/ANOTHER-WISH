@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
-export const ThreeWell: React.FC<{ onPlunge: () => void }> = ({ onPlunge }) => {
+export const ThreeWell: React.FC<{ onPlunge: () => void; compact?: boolean }> = ({ onPlunge, compact = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
@@ -220,9 +220,9 @@ export const ThreeWell: React.FC<{ onPlunge: () => void }> = ({ onPlunge }) => {
   }, []);
 
   return (
-    <div id="intro" className="relative w-full h-[calc(100vh-48px)] min-h-[560px] overflow-hidden cursor-pointer select-none" onClick={onPlunge}>
+    <div id="intro" className={`relative w-full overflow-hidden cursor-pointer select-none ${compact ? 'h-full min-h-[320px]' : 'h-[calc(100vh-48px)] min-h-[560px]'}`} onClick={onPlunge}>
       <div ref={containerRef} className="absolute inset-0 w-full h-full" />
-      <div className="intro-overlay absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none p-8">
+      <div className={`intro-overlay absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none p-8 ${compact ? 'hidden' : ''}`}>
         <div className="intro-title text-center">
           <h1 className="font-cinzel-decorative text-[clamp(1.7rem,5.5vw,3.4rem)] text-[#f5c842] tracking-widest leading-tight mb-2">
             Bitcoin<br />Wishing Well
@@ -236,7 +236,7 @@ export const ThreeWell: React.FC<{ onPlunge: () => void }> = ({ onPlunge }) => {
           <a href="https://x.com/SamSageWize" target="_blank" className="text-[#f5c842] hover:underline pointer-events-auto mt-1">Founder: @SamSageWize</a>
         </div>
       </div>
-      <div className="tap-hint absolute bottom-[6%] left-1/2 -translate-x-1/2 font-cinzel text-[0.68rem] text-[#8a6a30] tracking-[0.25em] uppercase z-20 pointer-events-none animate-[hp_2.2s_ease-in-out_infinite]">
+      <div className={`tap-hint absolute bottom-[6%] left-1/2 -translate-x-1/2 font-cinzel text-[0.68rem] text-[#8a6a30] tracking-[0.25em] uppercase z-20 pointer-events-none animate-[hp_2.2s_ease-in-out_infinite] ${compact ? 'hidden' : ''}`}>
         ↓ click anywhere to begin ↓
       </div>
     </div>
