@@ -194,7 +194,7 @@ export default function App() {
         const pay = addrs.find((a: any) => a.purpose === AddressPurpose.Payment) || ord;
         const bal = await fetchBalance(pay.address);
         setWallet({ type: 'xverse', ordAddr: ord.address, payAddr: pay.address, balance: bal });
-        setStatus({ type: 'ok', msg: 'Wallet connected. Review the estimate, then inscribe when ready.' });
+        setStatus({ type: 'ok', msg: 'Wallet connected safely. No transaction, signature, or service fee was requested.' });
       }
     } catch (err: any) {
       setStatus({ type: 'err', msg: 'Xverse connect failed: ' + err.message });
@@ -209,7 +209,7 @@ export default function App() {
       const accounts = await unisat.requestAccounts();
       const bal = await unisat.getBalance();
       setWallet({ type: 'unisat', ordAddr: accounts[0], payAddr: accounts[0], balance: bal.total });
-      setStatus({ type: 'ok', msg: 'UniSat connected. Xverse inscription support is live; UniSat inscription needs an API integration.' });
+      setStatus({ type: 'ok', msg: 'UniSat connected safely. No transaction or signature was requested. Use Xverse for live inscriptions.' });
     } catch (err: any) {
       setStatus({ type: 'err', msg: 'UniSat connect failed: ' + err.message });
     }
@@ -685,9 +685,10 @@ function SafetyPanel() {
         <ShieldCheck size={16} /> Safe Inscribing
       </h2>
       <ul className="space-y-3 text-sm leading-6 text-[#9c793c]">
+        <li>Connecting only shares public wallet addresses and reads balance. It does not spend, sign, or inscribe.</li>
         <li>Review the wallet prompt before signing. Bitcoin inscriptions are permanent.</li>
         <li>Use this for code, images, songs, and art that you want preserved on Bitcoin.</li>
-        <li>Your profile history and museum chat are keyed to the connected ordinal address.</li>
+        <li>Never enter a seed phrase or private key. This site will never ask for one.</li>
       </ul>
     </div>
   );
@@ -1120,6 +1121,16 @@ function WalletModal({ onClose, onXverse, onUnisat }: { onClose: () => void; onX
           <h3 className="font-cinzel text-sm uppercase tracking-widest text-[#f5c842]">Connect Wallet</h3>
           <button onClick={onClose} className="text-[#7a5a25] transition hover:text-[#f5c842]"><X size={20} /></button>
         </div>
+        <div className="mb-5 rounded-xl border border-[#2a1808] bg-black/30 p-4">
+          <h4 className="mb-2 flex items-center gap-2 font-cinzel text-[0.68rem] font-bold uppercase tracking-widest text-[#c9a040]">
+            <ShieldCheck size={14} /> Safe Connect
+          </h4>
+          <ul className="space-y-2 text-sm leading-6 text-[#9c793c]">
+            <li>Connect only shares public Bitcoin addresses.</li>
+            <li>No transaction, inscription, or service fee happens here.</li>
+            <li>Never enter a seed phrase or private key.</li>
+          </ul>
+        </div>
         <div className="space-y-3">
           <button onClick={onXverse} className="flex w-full items-center justify-between rounded-xl border border-[#3a2808] bg-gradient-to-br from-[#1c1208] to-[#130d05] p-4 font-cinzel text-[0.8rem] font-bold uppercase tracking-wider text-[#b09040] transition hover:border-[#c9a040] hover:text-[#f5c842]">
             <span>Xverse</span>
@@ -1151,6 +1162,9 @@ function ConfirmModal(props: {
         <h3 className="mb-6 flex items-center justify-center gap-2 text-center font-cinzel uppercase tracking-widest text-[#f5c842]">
           <AlertTriangle size={18} /> Confirm Inscription
         </h3>
+        <p className="mb-5 rounded-xl border border-[#3a2808] bg-black/30 p-3 text-sm leading-6 text-[#9c793c]">
+          This is the only step that asks your wallet to create an inscription and pay the service fee. Check the wallet prompt before approving.
+        </p>
         <div className="mb-8 space-y-4 text-sm">
           <ReviewLine label="Content" value={props.selFile ? `File: ${props.selFile.name}` : props.wishText ? 'Text inscription' : 'Empty'} />
           <ReviewLine label="Fee rate" value={`${props.currentRate} sats/vB`} />
