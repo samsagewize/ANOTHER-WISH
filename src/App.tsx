@@ -37,9 +37,22 @@ const inscriptionId = (ins: Inscription) => (ins.wishTxid.includes('i') ? ins.wi
 const ordinalsContentUrl = (ins: Inscription) => `https://ordinals.com/content/${inscriptionId(ins)}`;
 const ordIoUrl = (ins: Inscription) => `https://ord.io/${inscriptionId(ins)}`;
 
+type BrcLookup = {
+  ticker: string;
+  info?: Record<string, any>;
+  holders?: any[];
+  source?: string;
+  endpoints?: string[];
+  setupNeeded?: boolean;
+};
+
 export default function App() {
   const [tab, setTab] = useState<'inscribe' | 'profile'>('inscribe');
-  const [page, setPage] = useState<'home' | 'profile'>(() => (window.location.pathname === '/profile' ? 'profile' : 'home'));
+  const [page, setPage] = useState<'home' | 'profile' | 'brc'>(() => {
+    if (window.location.pathname === '/profile') return 'profile';
+    if (window.location.pathname === '/brc') return 'brc';
+    return 'home';
+  });
   const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
   const [selFile, setSelFile] = useState<File | null>(null);
   const [wishText, setWishText] = useState('');
@@ -58,9 +71,17 @@ export default function App() {
   const [showCongrats, setShowCongrats] = useState(false);
   const [lastTxid, setLastTxid] = useState('');
   const [historySearch, setHistorySearch] = useState('');
+  const [brcTicker, setBrcTicker] = useState('ordi');
+  const [brcLookup, setBrcLookup] = useState<BrcLookup | null>(null);
+  const [brcLoading, setBrcLoading] = useState(false);
+  const [brcError, setBrcError] = useState('');
 
   useEffect(() => {
-    const syncPage = () => setPage(window.location.pathname === '/profile' ? 'profile' : 'home');
+    const syncPage = () => {
+      if (window.location.pathname === '/profile') setPage('profile');
+      else if (window.location.pathname === '/brc') setPage('brc');
+      else setPage('home');
+    };
     window.addEventListener('popstate', syncPage);
     return () => window.removeEventListener('popstate', syncPage);
   }, []);
@@ -164,6 +185,36 @@ export default function App() {
     }
     window.history.pushState({}, '', '/profile');
     setPage('profile');
+  };
+
+  const goBrc = () => {
+    window.history.pushState({}, '', '/brc');
+    setPage('brc');
+  };
+
+  const lookupBrcTicker = async (tickerValue = brcTicker) => {
+    const cleanTicker = tickerValue.trim();
+    if (!/^[A-Za-z0-9]{4}$/.test(cleanTicker)) {
+      setBrcError('Use exactly 4 letters or numbers for original BRC-20 tickers.');
+      setBrcLookup(null);
+      return;
+    }
+
+    setBrcLoading(true);
+    setBrcError('');
+    try {
+      const res = await fetch(`/api/brc20/${encodeURIComponent(cleanTicker.toLowerCase())}`);
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload.error || 'Could not load BRC-20 data.');
+      }
+      setBrcLookup(payload);
+    } catch (err: any) {
+      setBrcError(err.message || 'Could not load BRC-20 data.');
+      setBrcLookup(null);
+    } finally {
+      setBrcLoading(false);
+    }
   };
 
   const currentRate = selRate === 'custom' ? customRate : feeRates[selRate];
@@ -436,6 +487,9 @@ export default function App() {
             <button onClick={goProfile} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'profile' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
               Profile
             </button>
+            <button onClick={goBrc} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'brc' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
+              BRC
+            </button>
             <span className="nav-live hidden items-center gap-2 rounded-full border border-[#50a860]/30 bg-[#50a860]/10 px-3 py-1 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest text-[#70d080] sm:flex">
               Mainnet
             </span>
@@ -475,6 +529,16 @@ export default function App() {
             goHome();
             setTab('inscribe');
           }}
+        />
+      ) : page === 'brc' ? (
+        <BrcPage
+          ticker={brcTicker}
+          lookup={brcLookup}
+          loading={brcLoading}
+          error={brcError}
+          onTicker={setBrcTicker}
+          onLookup={lookupBrcTicker}
+          onHome={goHome}
         />
       ) : (
       <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
@@ -642,6 +706,168 @@ export default function App() {
       </AnimatePresence>
     </div>
   );
+}
+
+function BrcPage({ ticker, lookup, loading, error, onTicker, onLookup, onHome }: {
+  ticker: string;
+  lookup: BrcLookup | null;
+  loading: boolean;
+  error: string;
+  onTicker: (value: string) => void;
+  onLookup: (value?: string) => void;
+  onHome: () => void;
+}) {
+  const cleanTicker = ticker.trim().toLowerCase();
+  const validTicker = /^[A-Za-z0-9]{4}$/.test(cleanTicker);
+  const info = lookup?.info || {};
+  const minted = brcField(info, ['minted', 'totalMinted', 'mintedSupply']);
+  const max = brcField(info, ['max', 'maxSupply', 'totalSupply']);
+  const holders = brcField(info, ['holders', 'holderCount']);
+  const transactions = brcField(info, ['transactions', 'txCount']);
+  const deployer = brcField(info, ['deployer', 'deployBy', 'address', 'creator']);
+  const deployInscription = brcField(info, ['inscriptionId', 'deployInscriptionId', 'deployInscription']);
+
+  return (
+    <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,0.92fr)_420px]">
+        <div className="rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-6 shadow-[0_24px_90px_rgba(0,0,0,0.42)] sm:p-8">
+          <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-[#f5c842]/20 bg-[#f5c842]/8 px-3 py-1 font-cinzel text-[0.62rem] uppercase tracking-[0.22em] text-[#c9a040]">
+            <Coins size={13} /> Read-only BRC-20
+          </div>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h1 className="font-cinzel-decorative text-[clamp(2.2rem,5vw,4rem)] leading-tight tracking-widest text-[#f5c842]">BRC Viewer</h1>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-[#b89655]">
+                Explore original 4-character BRC-20 tickers using indexed Bitcoin protocol data. This page does not mint, transfer, list, or request wallet signatures.
+              </p>
+            </div>
+            <button onClick={onHome} className="w-fit rounded-xl border border-[#3a2808] bg-black/35 px-5 py-3 font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-[#c9a040] transition hover:border-[#f5c842]/35 hover:text-[#f5c842]">
+              Back Home
+            </button>
+          </div>
+
+          <div className="mt-8 grid gap-3 rounded-2xl border border-[#2a1808] bg-black/35 p-3 sm:grid-cols-[1fr_auto]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7a5a25]" size={16} />
+              <input
+                value={ticker}
+                onChange={(e) => onTicker(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toLowerCase())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') onLookup();
+                }}
+                placeholder="ordi"
+                maxLength={4}
+                className="h-12 w-full rounded-xl border border-[#2a1808] bg-[#090502] pl-10 pr-4 font-mono text-lg uppercase tracking-[0.32em] text-[#f5c842] outline-none focus:border-[#c9a040]"
+              />
+            </div>
+            <button
+              onClick={() => onLookup()}
+              disabled={!validTicker || loading}
+              className="h-12 rounded-xl bg-gradient-to-r from-[#f5c842] to-[#c9a040] px-5 font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {loading ? 'Loading' : 'Lookup'}
+            </button>
+          </div>
+
+          {(error || lookup?.setupNeeded) && (
+            <div className="mt-4 rounded-2xl border border-[#7a4a18] bg-[#2a1605]/70 p-4 text-sm leading-6 text-[#d8a858]">
+              {error || 'Add UNISAT_API_KEY in Vercel to enable live BRC-20 indexer data.'}
+            </div>
+          )}
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Stat label="Ticker" value={(lookup?.ticker || cleanTicker || '----').toUpperCase()} />
+            <Stat label="Minted" value={formatBrcValue(minted)} />
+            <Stat label="Max" value={formatBrcValue(max)} />
+            <Stat label="Holders" value={formatBrcValue(holders)} />
+          </div>
+
+          <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_0.85fr]">
+            <section className="rounded-2xl border border-[#2a1808] bg-black/25 p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">Token Snapshot</h2>
+                {lookup?.source && <span className="rounded-full border border-[#50a860]/25 bg-[#50a860]/10 px-2 py-1 font-cinzel text-[0.55rem] uppercase tracking-widest text-[#70d080]">{lookup.source}</span>}
+              </div>
+              <div className="grid gap-3 text-sm">
+                <BrcRow label="Deploy inscription" value={formatBrcValue(deployInscription)} href={deployInscription ? `https://ordinals.com/inscription/${deployInscription}` : undefined} />
+                <BrcRow label="Deployer" value={formatBrcValue(deployer)} />
+                <BrcRow label="Transactions" value={formatBrcValue(transactions)} />
+                <BrcRow label="Limit per mint" value={formatBrcValue(brcField(info, ['lim', 'limit', 'mintLimit']))} />
+                <BrcRow label="Decimals" value={formatBrcValue(brcField(info, ['decimal', 'decimals']))} />
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-[#2a1808] bg-black/25 p-5">
+              <h2 className="mb-4 font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">Top Holders</h2>
+              {lookup?.holders?.length ? (
+                <div className="space-y-2">
+                  {lookup.holders.slice(0, 8).map((holder, index) => (
+                    <div key={`${holder.address || index}`} className="flex items-center justify-between gap-3 rounded-xl border border-[#1f1408] bg-[#090502] px-3 py-2 text-sm">
+                      <span className="min-w-0 truncate font-mono text-[#9c793c]">{holder.address || holder.owner || 'Unknown holder'}</span>
+                      <span className="shrink-0 font-mono text-[#f5c842]">{formatBrcValue(holder.overallBalance || holder.balance || holder.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-xl border border-[#1f1408] bg-[#090502] p-4 text-sm leading-6 text-[#7a5a25]">Lookup a ticker to load holder data when the indexer is configured.</p>
+              )}
+            </section>
+          </div>
+        </div>
+
+        <aside className="grid gap-4">
+          <ProtocolCard title="BRC-20" body="Ticker info, balances, holders, and transfer history come from a protocol indexer. Original tickers use exactly 4 letters or numbers." active />
+          <ProtocolCard title="Ordinals" body="Images and inscription content should resolve through ordinals.com/content/{inscriptionId} or ordinals.com/inscription/{inscriptionId}." />
+          <ProtocolCard title="Runes" body="Runes can be displayed the same way through read-only indexer endpoints before we add any wallet actions." />
+          <div className="rounded-2xl border border-[#2a1808] bg-[#100904]/88 p-5">
+            <h2 className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">Safety</h2>
+            <p className="mt-3 text-sm leading-6 text-[#8f6a2c]">This screen is view-only. No wallet transaction, PSBT, signature, mint, transfer, or listing can be created here.</p>
+          </div>
+        </aside>
+      </section>
+    </main>
+  );
+}
+
+function ProtocolCard({ title, body, active }: { title: string; body: string; active?: boolean }) {
+  return (
+    <div className={`rounded-2xl border p-5 ${active ? 'border-[#f5c842]/25 bg-[#f5c842]/8' : 'border-[#2a1808] bg-[#100904]/88'}`}>
+      <div className="mb-3 flex items-center gap-2 font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-[#f5c842]">
+        <ShieldCheck size={14} /> {title}
+      </div>
+      <p className="text-sm leading-6 text-[#8f6a2c]">{body}</p>
+    </div>
+  );
+}
+
+function BrcRow({ label, value, href }: { label: string; value: string; href?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-[#1f1408] bg-[#090502] px-3 py-2">
+      <span className="shrink-0 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#6f501f]">{label}</span>
+      {href ? (
+        <a href={href} target="_blank" rel="noopener noreferrer" className="min-w-0 truncate font-mono text-[#c9a040] transition hover:text-[#f5c842]">
+          {value} <ExternalLink className="inline" size={10} />
+        </a>
+      ) : (
+        <span className="min-w-0 truncate text-right font-mono text-[#c9a040]">{value}</span>
+      )}
+    </div>
+  );
+}
+
+function brcField(source: Record<string, any>, keys: string[]) {
+  for (const key of keys) {
+    if (source[key] !== undefined && source[key] !== null && source[key] !== '') return source[key];
+  }
+  return undefined;
+}
+
+function formatBrcValue(value: any) {
+  if (value === undefined || value === null || value === '') return '--';
+  if (typeof value === 'number') return value.toLocaleString();
+  const text = String(value);
+  if (/^\d+$/.test(text)) return BigInt(text).toLocaleString();
+  return /^\d+\.\d+$/.test(text) ? Number(text).toLocaleString() : text;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

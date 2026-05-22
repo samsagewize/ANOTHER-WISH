@@ -6,6 +6,21 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const UNISAT_BASE = "https://open-api.unisat.io";
+
+async function fetchUnisat(pathname: string, apiKey: string) {
+  const response = await fetch(`${UNISAT_BASE}${pathname}`, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      Accept: "application/json",
+    },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body?.code) {
+    throw new Error(body?.msg || `UniSat request failed with ${response.status}`);
+  }
+  return body?.data ?? body;
+}
 
 async function startServer() {
   const app = express();
@@ -38,6 +53,49 @@ async function startServer() {
     } catch (err: any) {
       console.error("Tracking error:", err);
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/brc20/:ticker", async (req, res) => {
+    const ticker = String(req.params.ticker || "").trim().toLowerCase();
+    if (!/^[a-z0-9]{4}$/.test(ticker)) {
+      res.status(400).json({ error: "BRC-20 ticker must be exactly 4 letters or numbers." });
+      return;
+    }
+
+    const apiKey = process.env.UNISAT_API_KEY;
+    if (!apiKey) {
+      res.status(503).json({
+        error: "UNISAT_API_KEY is not configured yet.",
+        ticker,
+        setupNeeded: true,
+        source: "UniSat Open API",
+        endpoints: [
+          `/v1/indexer/brc20/${ticker}/info`,
+          `/v1/indexer/brc20/${ticker}/holders?start=0&limit=8`,
+        ],
+      });
+      return;
+    }
+
+    try {
+      const [info, holders] = await Promise.all([
+        fetchUnisat(`/v1/indexer/brc20/${encodeURIComponent(ticker)}/info`, apiKey),
+        fetchUnisat(`/v1/indexer/brc20/${encodeURIComponent(ticker)}/holders?start=0&limit=8`, apiKey),
+      ]);
+
+      res.json({
+        ticker,
+        info,
+        holders: Array.isArray(holders?.detail) ? holders.detail : Array.isArray(holders) ? holders : [],
+        source: "UniSat Open API",
+        endpoints: [
+          `/v1/indexer/brc20/${ticker}/info`,
+          `/v1/indexer/brc20/${ticker}/holders?start=0&limit=8`,
+        ],
+      });
+    } catch (err: any) {
+      res.status(502).json({ error: err.message || "Unable to load BRC-20 data from UniSat.", ticker });
     }
   });
 
