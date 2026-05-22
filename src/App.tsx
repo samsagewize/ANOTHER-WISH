@@ -505,9 +505,10 @@ export default function App() {
                   <Pill icon={<Palette size={13} />} label="Art" />
                 </div>
 
-                <div className="mt-7 grid gap-3 sm:grid-cols-3">
-                  <Stat label="Museum" value={inscriptions.length.toString()} />
-                  <Stat label="Your history" value={wallet ? walletInscriptions.length.toString() : '--'} />
+                <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <Stat label="Profiles reached" value={Object.keys(profiles).length.toLocaleString()} />
+                  <Stat label="Wishing Well" value={inscriptions.length.toLocaleString()} />
+                  <Stat label="Your history" value={wallet ? walletInscriptions.length.toLocaleString() : '--'} />
                   <Stat label="Fee rate" value={`${currentRate} s/vB`} />
                 </div>
 
