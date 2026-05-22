@@ -21,6 +21,8 @@ service cloud.firestore {
              data.address is string &&
              data.displayName is string &&
              data.displayName.size() <= 40 &&
+             data.avatarUrl is string &&
+             data.avatarUrl.size() <= 500 &&
              data.twitterUrl is string &&
              data.twitterUrl.size() <= 120 &&
              data.bio is string &&

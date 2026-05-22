@@ -17,6 +17,7 @@ export interface Inscription {
 export interface Profile {
   address: string;
   displayName: string;
+  avatarUrl: string;
   twitterUrl: string;
   bio: string;
   verifiedAt: number;

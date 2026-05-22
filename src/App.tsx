@@ -34,6 +34,7 @@ const ThreeWell = React.lazy(() => import('./components/ThreeWell').then((module
 
 export default function App() {
   const [tab, setTab] = useState<'inscribe' | 'profile'>('inscribe');
+  const [page, setPage] = useState<'home' | 'profile'>(() => (window.location.pathname === '/profile' ? 'profile' : 'home'));
   const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
   const [selFile, setSelFile] = useState<File | null>(null);
   const [wishText, setWishText] = useState('');
@@ -42,7 +43,7 @@ export default function App() {
   const [customRate, setCustomRate] = useState(10);
   const [wallet, setWallet] = useState<{ type: WalletType; ordAddr: string; payAddr: string; balance: number } | null>(null);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
-  const [profileDraft, setProfileDraft] = useState({ displayName: '', twitterUrl: '', bio: '' });
+  const [profileDraft, setProfileDraft] = useState({ displayName: '', avatarUrl: '', twitterUrl: '', bio: '' });
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatText, setChatText] = useState('');
   const [status, setStatus] = useState<{ type: 'ok' | 'err' | 'info'; msg: string } | null>(null);
@@ -52,6 +53,12 @@ export default function App() {
   const [showCongrats, setShowCongrats] = useState(false);
   const [lastTxid, setLastTxid] = useState('');
   const [historySearch, setHistorySearch] = useState('');
+
+  useEffect(() => {
+    const syncPage = () => setPage(window.location.pathname === '/profile' ? 'profile' : 'home');
+    window.addEventListener('popstate', syncPage);
+    return () => window.removeEventListener('popstate', syncPage);
+  }, []);
 
   useEffect(() => {
     fetchFeeRates().then(setFeeRates);
@@ -125,17 +132,32 @@ export default function App() {
 
   useEffect(() => {
     if (!wallet) {
-      setProfileDraft({ displayName: '', twitterUrl: '', bio: '' });
+      setProfileDraft({ displayName: '', avatarUrl: '', twitterUrl: '', bio: '' });
       return;
     }
 
     const profile = profiles[wallet.ordAddr];
     setProfileDraft({
       displayName: profile?.displayName || '',
+      avatarUrl: profile?.avatarUrl || '',
       twitterUrl: profile?.twitterUrl || '',
       bio: profile?.bio || '',
     });
   }, [profiles, wallet]);
+
+  const goHome = () => {
+    window.history.pushState({}, '', '/');
+    setPage('home');
+  };
+
+  const goProfile = () => {
+    if (!wallet) {
+      setShowWalletSelect(true);
+      return;
+    }
+    window.history.pushState({}, '', '/profile');
+    setPage('profile');
+  };
 
   const currentRate = selRate === 'custom' ? customRate : feeRates[selRate];
   const contentBytes = selFile ? selFile.size : new TextEncoder().encode(wishText).length;
@@ -236,9 +258,16 @@ export default function App() {
       return;
     }
 
+    const avatarUrl = profileDraft.avatarUrl.trim();
+    if (avatarUrl && !/^https:\/\/.+/i.test(avatarUrl)) {
+      setStatus({ type: 'err', msg: 'Use a secure image URL starting with https:// for your profile picture.' });
+      return;
+    }
+
     const profile: Profile = {
       address: wallet.ordAddr,
       displayName: profileDraft.displayName.trim() || `${wallet.ordAddr.slice(0, 6)}...${wallet.ordAddr.slice(-4)}`,
+      avatarUrl,
       twitterUrl,
       bio: profileDraft.bio.trim(),
       verifiedAt: profiles[wallet.ordAddr]?.verifiedAt || Date.now(),
@@ -361,6 +390,8 @@ export default function App() {
       setShowCongrats(true);
       setProgress(null);
       setTab('profile');
+      window.history.pushState({}, '', '/profile');
+      setPage('profile');
       setWishText('');
       setSelFile(null);
       refreshBalance();
@@ -392,6 +423,12 @@ export default function App() {
             Bitcoin Wishing Well
           </a>
           <div className="flex items-center gap-2">
+            <button onClick={goHome} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'home' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
+              Home
+            </button>
+            <button onClick={goProfile} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'profile' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
+              Profile
+            </button>
             <span className="nav-live hidden items-center gap-2 rounded-full border border-[#50a860]/30 bg-[#50a860]/10 px-3 py-1 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest text-[#70d080] sm:flex">
               Mainnet
             </span>
@@ -401,7 +438,7 @@ export default function App() {
               </button>
             ) : (
               <div className="flex items-center gap-2">
-                <button onClick={() => setTab('profile')} className="hidden rounded-lg border border-[#3a2808] bg-black/35 px-3 py-2 font-mono text-[0.72rem] text-[#c9a040] transition hover:border-[#f5c842]/40 sm:block">
+                <button onClick={goProfile} className="hidden rounded-lg border border-[#3a2808] bg-black/35 px-3 py-2 font-mono text-[0.72rem] text-[#c9a040] transition hover:border-[#f5c842]/40 sm:block">
                   {wallet.ordAddr.slice(0, 5)}...{wallet.ordAddr.slice(-5)}
                 </button>
                 <button onClick={disconnectWallet} className="rounded-lg border border-[#3a2808] bg-black/35 p-2 text-[#7a5a25] transition hover:text-[#cc6060]" aria-label="Disconnect wallet">
@@ -413,6 +450,26 @@ export default function App() {
         </div>
       </nav>
 
+      {page === 'profile' ? (
+        <ProfilePage
+          wallet={wallet}
+          profile={wallet ? profiles[wallet.ordAddr] : undefined}
+          draft={profileDraft}
+          inscriptions={walletInscriptions}
+          search={historySearch}
+          status={status}
+          profiles={profiles}
+          onDraft={setProfileDraft}
+          onSave={saveProfile}
+          onSearch={setHistorySearch}
+          onConnect={() => setShowWalletSelect(true)}
+          onHome={goHome}
+          onCast={() => {
+            goHome();
+            setTab('inscribe');
+          }}
+        />
+      ) : (
       <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_430px] lg:items-stretch">
           <div className="overflow-hidden rounded-[28px] border border-[#3a2808] bg-[#100904]/88 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
@@ -451,7 +508,7 @@ export default function App() {
                   <button onClick={() => setTab('inscribe')} className="rounded-xl bg-gradient-to-r from-[#f5c842] to-[#c9a040] px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-black shadow-[0_0_28px_rgba(245,200,66,0.22)] transition hover:brightness-110">
                     Start Inscribing
                   </button>
-                  <button onClick={() => wallet ? setTab('profile') : setShowWalletSelect(true)} className="rounded-xl border border-[#3a2808] bg-black/35 px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-[#c9a040] transition hover:border-[#f5c842]/35 hover:text-[#f5c842]">
+                  <button onClick={goProfile} className="rounded-xl border border-[#3a2808] bg-black/35 px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-[#c9a040] transition hover:border-[#f5c842]/35 hover:text-[#f5c842]">
                     View Profile History
                   </button>
                 </div>
@@ -483,7 +540,7 @@ export default function App() {
               <button onClick={() => setTab('inscribe')} className={`flex items-center justify-center gap-2 rounded-lg py-2.5 font-cinzel text-[0.7rem] font-bold uppercase tracking-widest transition ${tab === 'inscribe' ? 'border border-[#f5c842]/25 bg-[#f5c842]/12 text-[#f5c842]' : 'text-[#7a5a25] hover:text-[#c9a040]'}`}>
                 <Coins size={15} /> Inscribe
               </button>
-              <button onClick={() => wallet ? setTab('profile') : setShowWalletSelect(true)} className={`flex items-center justify-center gap-2 rounded-lg py-2.5 font-cinzel text-[0.7rem] font-bold uppercase tracking-widest transition ${tab === 'profile' ? 'border border-[#f5c842]/25 bg-[#f5c842]/12 text-[#f5c842]' : 'text-[#7a5a25] hover:text-[#c9a040]'}`}>
+              <button onClick={goProfile} className={`flex items-center justify-center gap-2 rounded-lg py-2.5 font-cinzel text-[0.7rem] font-bold uppercase tracking-widest transition ${tab === 'profile' ? 'border border-[#f5c842]/25 bg-[#f5c842]/12 text-[#f5c842]' : 'text-[#7a5a25] hover:text-[#c9a040]'}`}>
                 <History size={15} /> Profile
                 <span className="rounded-full border border-[#f5c842]/20 bg-[#f5c842]/10 px-1.5 text-[0.58rem] text-[#f5c842]">{walletInscriptions.length}</span>
               </button>
@@ -541,6 +598,7 @@ export default function App() {
           </div>
         </section>
       </main>
+      )}
 
       <footer className="relative z-10 mx-auto max-w-7xl px-4 pb-10 pt-2 text-center sm:px-6">
         <div className="border-t border-[#3a2808]/60 pt-6 font-cinzel text-[0.62rem] uppercase leading-loose tracking-[0.18em] text-[#5f4218]">
@@ -587,6 +645,126 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ProfilePage({ wallet, profile, draft, inscriptions, search, status, profiles, onDraft, onSave, onSearch, onConnect, onHome, onCast }: {
+  wallet: { type: WalletType; ordAddr: string; payAddr: string; balance: number } | null;
+  profile?: Profile;
+  draft: { displayName: string; avatarUrl: string; twitterUrl: string; bio: string };
+  inscriptions: Inscription[];
+  search: string;
+  status: { type: 'ok' | 'err' | 'info'; msg: string } | null;
+  profiles: Record<string, Profile>;
+  onDraft: (next: { displayName: string; avatarUrl: string; twitterUrl: string; bio: string }) => void;
+  onSave: () => void;
+  onSearch: (value: string) => void;
+  onConnect: () => void;
+  onHome: () => void;
+  onCast: () => void;
+}) {
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return inscriptions;
+    return inscriptions.filter((ins) => (
+      ins.wish.toLowerCase().includes(term)
+      || ins.wishTxid.toLowerCase().includes(term)
+      || ins.contentType.toLowerCase().includes(term)
+      || (ins.status || 'pending').toLowerCase().includes(term)
+    ));
+  }, [inscriptions, search]);
+
+  if (!wallet) {
+    return (
+      <main className="relative z-10 mx-auto max-w-5xl px-4 py-10 sm:px-6">
+        <div className="rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-8 text-center shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
+          <User className="mx-auto mb-4 text-[#6f501f]" size={48} />
+          <h1 className="font-cinzel-decorative text-3xl tracking-widest text-[#f5c842]">Wallet Profile</h1>
+          <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[#9c793c]">
+            Connect your ordinal wallet to edit your picture and bio, link your Twitter, and see every inscription this wallet created on the Wishing Well.
+          </p>
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            <button onClick={onConnect} className="rounded-xl bg-[#f5c842] px-5 py-3 font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-black">Connect Wallet</button>
+            <button onClick={onHome} className="rounded-xl border border-[#3a2808] px-5 py-3 font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-[#c9a040]">Back Home</button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const displayName = profile?.displayName || `${wallet.ordAddr.slice(0, 6)}...${wallet.ordAddr.slice(-4)}`;
+  const avatar = draft.avatarUrl || profile?.avatarUrl;
+
+  return (
+    <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
+      <section className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)]">
+        <aside className="rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
+          <div className="mb-5 text-center">
+            <div className="mx-auto mb-4 grid h-32 w-32 place-items-center overflow-hidden rounded-3xl border border-[#3a2808] bg-black/35">
+              {avatar ? (
+                <img src={avatar} alt="Profile avatar" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <User className="text-[#6f501f]" size={46} />
+              )}
+            </div>
+            <h1 className="font-cinzel-decorative text-2xl tracking-widest text-[#f5c842]">{displayName}</h1>
+            <p className="mt-2 break-all font-mono text-[0.72rem] text-[#7a5a25]">{wallet.ordAddr}</p>
+            {profile?.twitterUrl && (
+              <a href={profile.twitterUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-sm text-[#f5c842] hover:underline">
+                <AtSign size={14} /> Twitter linked
+              </a>
+            )}
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <MiniStat label="Total" value={inscriptions.length.toString()} />
+            <MiniStat label="Confirmed" value={inscriptions.filter((ins) => ins.status === 'confirmed').length.toString()} />
+            <MiniStat label="Pending" value={inscriptions.filter((ins) => ins.status === 'pending' || !ins.status).length.toString()} />
+          </div>
+
+          <div className="mt-5 space-y-3 rounded-2xl border border-[#2a1808] bg-black/25 p-4">
+            <h2 className="font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-[#f5c842]">Edit Profile</h2>
+            <input value={draft.displayName} onChange={(e) => onDraft({ ...draft, displayName: e.target.value })} placeholder="Display name" maxLength={40} className="w-full rounded-xl border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]" />
+            <input value={draft.avatarUrl} onChange={(e) => onDraft({ ...draft, avatarUrl: e.target.value })} placeholder="Profile picture https:// URL" className="w-full rounded-xl border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]" />
+            <input value={draft.twitterUrl} onChange={(e) => onDraft({ ...draft, twitterUrl: e.target.value })} placeholder="https://x.com/username" className="w-full rounded-xl border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]" />
+            <textarea value={draft.bio} onChange={(e) => onDraft({ ...draft, bio: e.target.value })} placeholder="Bio for your ordinal wallet museum" maxLength={240} className="h-28 w-full resize-none rounded-xl border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]" />
+            <button onClick={onSave} className="w-full rounded-xl bg-[#f5c842] px-4 py-3 font-cinzel text-[0.7rem] font-bold uppercase tracking-widest text-black">Save Profile</button>
+            {status && (
+              <p className={`rounded-xl border p-3 text-sm leading-6 ${status.type === 'ok' ? 'border-[#285028] bg-[#286428]/10 text-[#70c070]' : status.type === 'err' ? 'border-[#502020] bg-[#641e1e]/10 text-[#dd7070]' : 'border-[#3a2808] bg-[#3c1e05]/10 text-[#a08040]'}`}>{status.msg}</p>
+            )}
+          </div>
+        </aside>
+
+        <section className="rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
+          <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+            <div>
+              <h2 className="font-cinzel-decorative text-2xl tracking-widest text-[#f5c842]">Wishing Well History</h2>
+              <p className="mt-2 text-sm leading-6 text-[#9c793c]">Everything inscribed through this site with the connected wallet.</p>
+            </div>
+            <div className="relative min-w-[240px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5a4018]" size={15} />
+              <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Search inscriptions" className="w-full rounded-xl border border-[#2a1808] bg-black/35 py-2 pl-9 pr-3 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]" />
+            </div>
+          </div>
+
+          {!filtered.length ? (
+            <div className="rounded-2xl border border-dashed border-[#2a1a08] bg-black/20 p-10 text-center">
+              <Coins className="mx-auto mb-3 text-[#4a3018]" size={42} />
+              <p className="mb-5 text-sm text-[#7a5a25]">No Wishing Well inscriptions found for this wallet yet.</p>
+              <button onClick={onCast} className="font-cinzel text-[0.7rem] uppercase tracking-widest text-[#c9a040] hover:text-[#f5c842]">Inscribe something</button>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {filtered.map((ins) => (
+                <React.Fragment key={ins.wishTxid}>
+                  <InscriptionCard ins={ins} profile={profiles[ins.address]} />
+                </React.Fragment>
+              ))}
+            </div>
+          )}
+        </section>
+      </section>
+    </main>
+  );
+}
+
 function Pill({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-[#3a2808] bg-black/30 px-3 py-1 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#c9a040]">
@@ -598,14 +776,14 @@ function Pill({ icon, label }: { icon: React.ReactNode; label: string }) {
 function ProfileSummary({ wallet, profile, draft, total, confirmed, pending, balance, onConnect, onRefresh, onDraft, onSave }: {
   wallet: { type: WalletType; ordAddr: string; payAddr: string; balance: number } | null;
   profile?: Profile;
-  draft: { displayName: string; twitterUrl: string; bio: string };
+  draft: { displayName: string; avatarUrl: string; twitterUrl: string; bio: string };
   total: number;
   confirmed: number;
   pending: number;
   balance: number;
   onConnect: () => void;
   onRefresh: () => void;
-  onDraft: (next: { displayName: string; twitterUrl: string; bio: string }) => void;
+  onDraft: (next: { displayName: string; avatarUrl: string; twitterUrl: string; bio: string }) => void;
   onSave: () => void;
 }) {
   return (
@@ -637,6 +815,12 @@ function ProfileSummary({ wallet, profile, draft, total, confirmed, pending, bal
               value={draft.displayName}
               onChange={(e) => onDraft({ ...draft, displayName: e.target.value })}
               placeholder="Display name"
+              className="w-full rounded-lg border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]"
+            />
+            <input
+              value={draft.avatarUrl}
+              onChange={(e) => onDraft({ ...draft, avatarUrl: e.target.value })}
+              placeholder="Profile picture URL"
               className="w-full rounded-lg border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]"
             />
             <input
