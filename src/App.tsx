@@ -30,7 +30,12 @@ import { OperationType, auth, collection, db, doc, handleFirestoreError, limit, 
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 
 const MAX_FILE_SIZE = 60 * 1024;
+const MUSEUM_RESET_AT = 1779425915000;
 const ThreeWell = React.lazy(() => import('./components/ThreeWell').then((module) => ({ default: module.ThreeWell })));
+
+const inscriptionId = (ins: Inscription) => (ins.wishTxid.includes('i') ? ins.wishTxid : `${ins.wishTxid}i0`);
+const ordinalsContentUrl = (ins: Inscription) => `https://ordinals.com/content/${inscriptionId(ins)}`;
+const ordIoUrl = (ins: Inscription) => `https://ord.io/${inscriptionId(ins)}`;
 
 export default function App() {
   const [tab, setTab] = useState<'inscribe' | 'profile'>('inscribe');
@@ -77,7 +82,9 @@ export default function App() {
 
     const q = query(collection(db, 'inscriptions'), orderBy('timestamp', 'desc'), limit(150));
     const unsubSnap = onSnapshot(q, (snapshot) => {
-      setInscriptions(snapshot.docs.map((d) => d.data() as Inscription));
+      setInscriptions(snapshot.docs
+        .map((d) => d.data() as Inscription)
+        .filter((ins) => ins.timestamp >= MUSEUM_RESET_AT && !ins.isDemo));
     }, (err) => {
       handleFirestoreError(err, OperationType.LIST, 'inscriptions');
     });
@@ -1093,10 +1100,10 @@ function MuseumGallery({ inscriptions, profiles }: { inscriptions: Inscription[]
                 <p className="mt-1 font-mono text-[0.65rem] text-[#5f4218]">{ins.wishTxid.slice(0, 8)}...{ins.wishTxid.slice(-6)}</p>
               </div>
               <div className="flex flex-col gap-2">
-                <a href={`https://ordinals.com/content/${ins.wishTxid}i0`} target="_blank" rel="noopener noreferrer" className="text-[#7a5a25] transition hover:text-[#f5c842]" aria-label="View on-chain content">
+                <a href={ordinalsContentUrl(ins)} target="_blank" rel="noopener noreferrer" className="text-[#7a5a25] transition hover:text-[#f5c842]" aria-label="View on-chain content">
                   <ImageIcon size={14} />
                 </a>
-                <a href={`https://ord.io/${ins.wishTxid}i0`} target="_blank" rel="noopener noreferrer" className="text-[#7a5a25] transition hover:text-[#f5c842]" aria-label="View on Ord.io">
+                <a href={ordIoUrl(ins)} target="_blank" rel="noopener noreferrer" className="text-[#7a5a25] transition hover:text-[#f5c842]" aria-label="View on Ord.io">
                   <ExternalLink size={14} />
                 </a>
               </div>
@@ -1221,10 +1228,10 @@ function InscriptionCard({ ins, profile }: { ins: Inscription; profile?: Profile
         </div>
         <p className="line-clamp-2 min-h-[40px] text-sm italic leading-5 text-[#d4a040]">"{ins.wish}"</p>
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#2a1a08] pt-3">
-          <a href={`https://ordinals.com/content/${ins.wishTxid}i0`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#c9a040] transition hover:text-[#f5c842]">
+          <a href={ordinalsContentUrl(ins)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#c9a040] transition hover:text-[#f5c842]">
             Content <ExternalLink size={9} />
           </a>
-          <a href={`https://ord.io/${ins.wishTxid}i0`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#c9a040] transition hover:text-[#f5c842]">
+          <a href={ordIoUrl(ins)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#c9a040] transition hover:text-[#f5c842]">
             Ord.io <ExternalLink size={9} />
           </a>
         </div>
@@ -1238,12 +1245,12 @@ function PreviewThumb({ ins, compact }: { ins: Inscription; compact?: boolean })
   if (ins.contentType.startsWith('image/')) {
     return (
       <img
-        src={ins.contentB64 ? `data:${ins.contentType};base64,${ins.contentB64}` : `https://ordinals.com/content/${ins.wishTxid}i0`}
+        src={ordinalsContentUrl(ins)}
         alt="Inscription content"
         className={`${size} object-cover`}
         referrerPolicy="no-referrer"
         onError={(e) => {
-          (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/bitcoin/400/400?blur=10';
+          (e.currentTarget as HTMLImageElement).style.display = 'none';
         }}
       />
     );
@@ -1287,7 +1294,7 @@ function SuccessModal({ lastTxid, onClose }: { lastTxid: string; onClose: () => 
         <p className="mt-3 text-sm leading-7 text-[#9c793c]">Your inscription was submitted and added to your profile history.</p>
         <div className="my-6 flex items-center justify-center gap-4 rounded-2xl border border-[#3a2808] bg-black/40 p-4">
           <a href={`https://mempool.space/tx/${lastTxid}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.65rem] uppercase tracking-widest text-[#c9a040] hover:text-[#f5c842]">View Tx <ExternalLink size={10} /></a>
-          <a href={`https://ord.io/${lastTxid}i0`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.65rem] uppercase tracking-widest text-[#c9a040] hover:text-[#f5c842]">View Ord <ExternalLink size={10} /></a>
+          <a href={`https://ord.io/${lastTxid.includes('i') ? lastTxid : `${lastTxid}i0`}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.65rem] uppercase tracking-widest text-[#c9a040] hover:text-[#f5c842]">View Ord <ExternalLink size={10} /></a>
         </div>
         <button onClick={onClose} className="w-full rounded-xl bg-gradient-to-r from-[#c9a040] to-[#f5c842] py-4 font-cinzel text-[0.8rem] font-bold uppercase tracking-[0.2em] text-black">
           Back to App

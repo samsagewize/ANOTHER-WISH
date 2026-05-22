@@ -34,21 +34,6 @@ async function startServer() {
 
       await fs.writeFile(filePath, JSON.stringify(inscriptions, null, 2));
 
-      // If registered, also add to registry.json
-      if (inscription.registered) {
-        const registryPath = path.join(process.cwd(), "registry.json");
-        let registry = [];
-        try {
-          const regData = await fs.readFile(registryPath, "utf-8");
-          registry = JSON.parse(regData);
-        } catch (err) {}
-        registry.push({
-          ...inscription,
-          registeredAt: new Date().toISOString()
-        });
-        await fs.writeFile(registryPath, JSON.stringify(registry, null, 2));
-      }
-
       res.json({ success: true });
     } catch (err: any) {
       console.error("Tracking error:", err);
