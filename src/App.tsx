@@ -48,9 +48,10 @@ type BrcLookup = {
 
 export default function App() {
   const [tab, setTab] = useState<'inscribe' | 'profile'>('inscribe');
-  const [page, setPage] = useState<'home' | 'profile' | 'brc'>(() => {
+  const [page, setPage] = useState<'home' | 'profile' | 'brc' | 'about'>(() => {
     if (window.location.pathname === '/profile') return 'profile';
     if (window.location.pathname === '/brc') return 'brc';
+    if (window.location.pathname === '/about') return 'about';
     return 'home';
   });
   const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
@@ -80,6 +81,7 @@ export default function App() {
     const syncPage = () => {
       if (window.location.pathname === '/profile') setPage('profile');
       else if (window.location.pathname === '/brc') setPage('brc');
+      else if (window.location.pathname === '/about') setPage('about');
       else setPage('home');
     };
     window.addEventListener('popstate', syncPage);
@@ -190,6 +192,11 @@ export default function App() {
   const goBrc = () => {
     window.history.pushState({}, '', '/brc');
     setPage('brc');
+  };
+
+  const goAbout = () => {
+    window.history.pushState({}, '', '/about');
+    setPage('about');
   };
 
   const lookupBrcTicker = async (tickerValue = brcTicker) => {
@@ -489,6 +496,9 @@ export default function App() {
             <button onClick={goProfile} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'profile' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
               Profile
             </button>
+            <button onClick={goAbout} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'about' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
+              About
+            </button>
             <button onClick={goBrc} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'brc' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
               BRC
             </button>
@@ -541,6 +551,14 @@ export default function App() {
           onTicker={setBrcTicker}
           onLookup={lookupBrcTicker}
           onHome={goHome}
+        />
+      ) : page === 'about' ? (
+        <AboutPage
+          onHome={goHome}
+          onCast={() => {
+            goHome();
+            setTab('inscribe');
+          }}
         />
       ) : (
       <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
@@ -713,6 +731,132 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+const commercialSlides = [
+  {
+    kicker: '00-03 seconds',
+    headline: 'Make a wish.',
+    body: 'Start with words, art, music, code, or a tiny file worth preserving.',
+  },
+  {
+    kicker: '03-06 seconds',
+    headline: 'Drop it into Bitcoin.',
+    body: 'WishOnBitcoin turns your idea into an ordinal inscription on the eternal ledger.',
+  },
+  {
+    kicker: '06-09 seconds',
+    headline: 'See the cost before you sign.',
+    body: 'Review content size, fee speed, network fee, and service fee before your wallet prompt.',
+  },
+  {
+    kicker: '09-12 seconds',
+    headline: 'Get the inscription ID.',
+    body: 'Every wish gets a visible ID so people can find it, verify it, and open it on-chain.',
+  },
+  {
+    kicker: '12-15 seconds',
+    headline: 'Build the museum.',
+    body: 'Your profile history and the public museum index every wish made through the well.',
+  },
+];
+
+function AboutPage({ onHome, onCast }: { onHome: () => void; onCast: () => void }) {
+  const [activeSlide, setActiveSlide] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActiveSlide((current) => (current + 1) % commercialSlides.length);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const slide = commercialSlides[activeSlide];
+
+  return (
+    <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-stretch">
+        <div className="commercial-frame relative min-h-[620px] overflow-hidden rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-6 shadow-[0_24px_90px_rgba(0,0,0,0.42)] sm:p-8">
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_22%,rgba(245,200,66,0.18),transparent_26%),radial-gradient(circle_at_50%_78%,rgba(80,168,96,0.08),transparent_28%)]" />
+          <div className="relative z-10 flex min-h-[560px] flex-col justify-between">
+            <div className="flex items-center justify-between gap-3">
+              <span className="rounded-full border border-[#f5c842]/25 bg-[#f5c842]/10 px-3 py-1 font-cinzel text-[0.62rem] font-bold uppercase tracking-[0.22em] text-[#f5c842]">
+                15 second commercial
+              </span>
+              <span className="font-mono text-xs text-[#7a5a25]">{activeSlide + 1}/5</span>
+            </div>
+
+            <div className="mx-auto grid max-w-4xl gap-8 py-10 text-center">
+              <div className="mx-auto grid h-24 w-24 place-items-center rounded-full border border-[#f5c842]/30 bg-black/40 shadow-[0_0_60px_rgba(245,200,66,0.18)]">
+                <Coins className="text-[#f5c842]" size={38} />
+              </div>
+              <div key={activeSlide} className="commercial-slide">
+                <p className="font-cinzel text-[0.68rem] font-bold uppercase tracking-[0.28em] text-[#9c793c]">{slide.kicker}</p>
+                <h1 className="mt-5 font-cinzel-decorative text-[clamp(2.8rem,8vw,6.6rem)] leading-none tracking-widest text-[#f5c842]">
+                  {slide.headline}
+                </h1>
+                <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-[#c7a866]">
+                  {slide.body}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              <div className="grid grid-cols-5 gap-2" aria-label="Commercial slide progress">
+                {commercialSlides.map((item, index) => (
+                  <button
+                    key={item.headline}
+                    onClick={() => setActiveSlide(index)}
+                    className={`h-2 rounded-full transition ${index === activeSlide ? 'bg-[#f5c842]' : 'bg-[#3a2808]'}`}
+                    aria-label={`Show slide ${index + 1}`}
+                  />
+                ))}
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-[#1a1008]">
+                <div key={activeSlide} className="commercial-progress h-full bg-gradient-to-r from-[#c9a040] to-[#f5c842]" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside className="grid gap-5">
+          <section className="rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
+            <h2 className="font-cinzel-decorative text-2xl tracking-widest text-[#f5c842]">What is this?</h2>
+            <p className="mt-4 text-sm leading-7 text-[#9c793c]">
+              WishOnBitcoin is a Bitcoin inscription studio and social museum. It helps people preserve small creations on-chain, then indexes each inscription to a wallet profile and public museum.
+            </p>
+            <div className="mt-5 grid gap-3">
+              <InfoLine label="Preserve" value="Text, art, music, code, and files" />
+              <InfoLine label="Review" value="Fees and content before signing" />
+              <InfoLine label="Index" value="Profile history plus public museum" />
+            </div>
+          </section>
+
+          <section className="rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
+            <h2 className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">Ready?</h2>
+            <p className="mt-3 text-sm leading-7 text-[#9c793c]">Turn the commercial into an inscription. Start with one sentence or one tiny file.</p>
+            <div className="mt-5 grid gap-3">
+              <button onClick={onCast} className="rounded-xl bg-gradient-to-r from-[#f5c842] to-[#c9a040] px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-black transition hover:brightness-110">
+                Start Inscribing
+              </button>
+              <button onClick={onHome} className="rounded-xl border border-[#3a2808] bg-black/35 px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-[#c9a040] transition hover:border-[#f5c842]/35 hover:text-[#f5c842]">
+                Back Home
+              </button>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </main>
+  );
+}
+
+function InfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-[#2a1808] bg-black/25 p-4">
+      <div className="font-cinzel text-[0.58rem] uppercase tracking-widest text-[#6f501f]">{label}</div>
+      <div className="mt-1 text-sm text-[#d4a040]">{value}</div>
     </div>
   );
 }

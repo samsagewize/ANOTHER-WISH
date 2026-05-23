@@ -117,3 +117,40 @@
     transform: translate(-50%, min(29rem, 68vh)) scale(0.45);
   }
 }
+
+.commercial-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(120deg, transparent 0%, rgba(245, 200, 66, 0.08) 45%, transparent 62%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 7px);
+  mix-blend-mode: screen;
+}
+
+.commercial-slide {
+  animation: commercial-slide-in 0.62s ease both;
+}
+
+.commercial-progress {
+  animation: commercial-progress 3s linear both;
+}
+
+@keyframes commercial-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+    filter: blur(7px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes commercial-progress {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
