@@ -72,3 +72,48 @@
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(245, 200, 66, 0.18), transparent);
 }
+
+.well-welcome {
+  background:
+    radial-gradient(circle at 50% 78%, rgba(245, 200, 66, 0.16), transparent 18%),
+    linear-gradient(180deg, transparent 46%, rgba(0, 0, 0, 0.58));
+}
+
+.falling-wish-token {
+  position: absolute;
+  left: 50%;
+  top: -3.5rem;
+  display: grid;
+  width: 3.5rem;
+  height: 3.5rem;
+  place-items: center;
+  border: 1px solid rgba(245, 200, 66, 0.82);
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 25%, #fff0a8, #f5c842 54%, #8a5c12);
+  color: #130a02;
+  font-family: 'Cinzel', serif;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: 0 0 26px rgba(245, 200, 66, 0.34);
+  animation: wishing-well-drop 4.4s cubic-bezier(0.52, 0, 0.34, 1) infinite;
+}
+
+@keyframes wishing-well-drop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -1rem) scale(0.78);
+  }
+  14% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+    transform: translate(-50%, min(24rem, 58vh)) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, min(29rem, 68vh)) scale(0.45);
+  }
+}

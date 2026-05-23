@@ -235,6 +235,7 @@ export default function App() {
     return walletInscriptions.filter((ins) => (
       ins.wish.toLowerCase().includes(search)
       || ins.wishTxid.toLowerCase().includes(search)
+      || inscriptionId(ins).toLowerCase().includes(search)
       || ins.contentType.toLowerCase().includes(search)
       || (ins.status || 'pending').toLowerCase().includes(search)
     ));
@@ -445,6 +446,7 @@ export default function App() {
       }
 
       setLastTxid(newIns.wishTxid);
+      setStatus({ type: 'ok', msg: `Inscription ID ${inscriptionId(newIns)} is now indexing on your profile and the public museum.` });
       setShowCongrats(true);
       setProgress(null);
       setTab('profile');
@@ -549,6 +551,13 @@ export default function App() {
                 <React.Suspense fallback={<div className="h-full min-h-[320px] bg-[radial-gradient(circle_at_center,#1a1208,#020202_70%)]" />}>
                   <ThreeWell onPlunge={() => setTab('inscribe')} compact />
                 </React.Suspense>
+                <div className="well-welcome pointer-events-none absolute inset-0 z-10 flex items-end justify-center p-6">
+                  <span className="falling-wish-token">wish</span>
+                  <div className="rounded-2xl border border-[#f5c842]/30 bg-black/55 px-5 py-3 text-center shadow-[0_0_34px_rgba(245,200,66,0.16)] backdrop-blur-sm">
+                    <p className="font-cinzel-decorative text-lg tracking-widest text-[#f5c842] sm:text-xl">Welcome to the Wishing Well</p>
+                    <p className="mt-1 font-cinzel text-[0.58rem] uppercase tracking-[0.2em] text-[#9c793c]">fall in, inscribe, index forever</p>
+                  </div>
+                </div>
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/10 via-transparent to-[#100904] lg:bg-gradient-to-r" />
               </div>
 
@@ -557,10 +566,10 @@ export default function App() {
                   <ShieldCheck size={13} /> Bitcoin Ordinals
                 </div>
                 <h1 className="font-cinzel-decorative text-[clamp(2rem,5vw,4.2rem)] leading-tight tracking-widest text-[#f5c842]">
-                  Inscribe Forever
+                  Welcome to the Wishing Well
                 </h1>
                 <p className="mt-4 max-w-xl text-[1rem] leading-8 text-[#b89655]">
-                  The home for inscribing code, images, songs, and art on Bitcoin, then building a social museum around your ordinal wallet.
+                  Drop code, images, songs, and art into Bitcoin. Every wish made here is indexed to your ordinal profile and the public museum with a visible inscription ID.
                 </p>
                 <div className="mt-5 flex flex-wrap gap-2">
                   <Pill icon={<Code2 size={13} />} label="Code" />
@@ -900,6 +909,7 @@ function ProfilePage({ wallet, profile, draft, inscriptions, search, status, pro
     return inscriptions.filter((ins) => (
       ins.wish.toLowerCase().includes(term)
       || ins.wishTxid.toLowerCase().includes(term)
+      || inscriptionId(ins).toLowerCase().includes(term)
       || ins.contentType.toLowerCase().includes(term)
       || (ins.status || 'pending').toLowerCase().includes(term)
     ));
@@ -912,7 +922,7 @@ function ProfilePage({ wallet, profile, draft, inscriptions, search, status, pro
           <User className="mx-auto mb-4 text-[#6f501f]" size={48} />
           <h1 className="font-cinzel-decorative text-3xl tracking-widest text-[#f5c842]">Wallet Profile</h1>
           <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[#9c793c]">
-            Connect your ordinal wallet to edit your picture and bio, link your Twitter, and see every inscription this wallet created on the Wishing Well.
+            Connect your ordinal wallet to edit your picture and bio, link your Twitter, and see every Wishing Well inscription ID indexed to this profile.
           </p>
           <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
             <button onClick={onConnect} className="rounded-xl bg-[#f5c842] px-5 py-3 font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-black">Connect Wallet</button>
@@ -970,7 +980,7 @@ function ProfilePage({ wallet, profile, draft, inscriptions, search, status, pro
           <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
             <div>
               <h2 className="font-cinzel-decorative text-2xl tracking-widest text-[#f5c842]">Wishing Well History</h2>
-              <p className="mt-2 text-sm leading-6 text-[#9c793c]">Everything inscribed through this site with the connected wallet.</p>
+              <p className="mt-2 text-sm leading-6 text-[#9c793c]">Everything inscribed through this site with the connected wallet, including the visible ordinal inscription ID.</p>
             </div>
             <div className="relative min-w-[240px]">
               <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5a4018]" size={15} />
@@ -1266,7 +1276,7 @@ function HistoryPanel({ wallet, search, inscriptions, total, profiles, onSearch,
       <div className="rounded-2xl border border-dashed border-[#3a2808] bg-black/25 p-10 text-center">
         <History className="mx-auto mb-4 text-[#6f501f]" size={42} />
         <h2 className="font-cinzel-decorative text-2xl tracking-widest text-[#f5c842]">Profile History</h2>
-        <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#9c793c]">Connect your wallet to see every inscription made from that ordinal address.</p>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#9c793c]">Connect your wallet to see every inscription ID indexed to that ordinal address.</p>
         <button onClick={onConnect} className="mt-5 rounded-xl bg-[#f5c842] px-5 py-3 font-cinzel text-[0.7rem] font-bold uppercase tracking-widest text-black">Connect Wallet</button>
       </div>
     );
@@ -1277,7 +1287,7 @@ function HistoryPanel({ wallet, search, inscriptions, total, profiles, onSearch,
       <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
         <div>
           <h2 className="font-cinzel-decorative text-2xl tracking-widest text-[#f5c842]">Profile History</h2>
-          <p className="mt-2 text-sm text-[#7a5a25]">{total} inscription{total === 1 ? '' : 's'} found for this wallet.</p>
+          <p className="mt-2 text-sm text-[#7a5a25]">{total} indexed inscription{total === 1 ? '' : 's'} found for this wallet.</p>
         </div>
         <div className="relative min-w-[220px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5a4018]" size={15} />
@@ -1310,7 +1320,7 @@ function MuseumGallery({ inscriptions, profiles }: { inscriptions: Inscription[]
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">On-Chain Museum</h2>
-          <p className="mt-1 text-sm text-[#7a5a25]">All inscriptions created on this website. Open any piece to view it on-chain.</p>
+          <p className="mt-1 text-sm text-[#7a5a25]">All inscriptions created on this website, indexed by profile with visible inscription IDs.</p>
         </div>
         <Clock size={16} className="shrink-0 text-[#7a5a25]" />
       </div>
@@ -1324,7 +1334,8 @@ function MuseumGallery({ inscriptions, profiles }: { inscriptions: Inscription[]
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm text-[#d4a040]">{ins.wish}</p>
                 <p className="mt-1 truncate text-[0.7rem] text-[#7a5a25]">{profiles[ins.address]?.displayName || `${ins.address.slice(0, 6)}...${ins.address.slice(-4)}`}</p>
-                <p className="mt-1 font-mono text-[0.65rem] text-[#5f4218]">{ins.wishTxid.slice(0, 8)}...{ins.wishTxid.slice(-6)}</p>
+                <p className="mt-2 font-cinzel text-[0.55rem] uppercase tracking-widest text-[#6f501f]">Inscription ID</p>
+                <p className="mt-1 break-all font-mono text-[0.65rem] text-[#c9a040]">{inscriptionId(ins)}</p>
               </div>
               <div className="flex flex-col gap-2">
                 <a href={ordinalsContentUrl(ins)} target="_blank" rel="noopener noreferrer" className="text-[#7a5a25] transition hover:text-[#f5c842]" aria-label="View on-chain content">
@@ -1348,7 +1359,7 @@ function HowItWorks() {
     ['Choose what to preserve', 'Upload code, images, songs, HTML, JSON, writing, or art. Smaller files cost less.'],
     ['Pick fee speed', 'Slow is cheaper. Fast is usually quicker. Custom is for advanced users watching mempool fees.'],
     ['Review and sign', 'Check network fee, service fee, content type, and wallet prompt before signing.'],
-    ['Visit your museum', 'After submission, your profile history and the public museum show the on-chain inscription link.'],
+    ['Visit your museum', 'After submission, your profile history and the public museum show the on-chain inscription ID and link.'],
   ];
 
   return (
@@ -1454,6 +1465,10 @@ function InscriptionCard({ ins, profile }: { ins: Inscription; profile?: Profile
           {profile?.twitterUrl && <AtSign size={12} className="text-[#f5c842]" />}
         </div>
         <p className="line-clamp-2 min-h-[40px] text-sm italic leading-5 text-[#d4a040]">"{ins.wish}"</p>
+        <div className="mt-3 rounded-xl border border-[#2a1a08] bg-black/25 p-2">
+          <div className="font-cinzel text-[0.52rem] uppercase tracking-widest text-[#6f501f]">Inscription ID</div>
+          <div className="mt-1 break-all font-mono text-[0.66rem] leading-4 text-[#c9a040]">{inscriptionId(ins)}</div>
+        </div>
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#2a1a08] pt-3">
           <a href={ordinalsContentUrl(ins)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#c9a040] transition hover:text-[#f5c842]">
             Content <ExternalLink size={9} />
@@ -1511,6 +1526,8 @@ function StatusBadge({ status }: { status?: 'pending' | 'confirmed' | 'failed' }
 }
 
 function SuccessModal({ lastTxid, onClose }: { lastTxid: string; onClose: () => void }) {
+  const visibleInscriptionId = lastTxid.includes('i') ? lastTxid : `${lastTxid}i0`;
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 p-6 backdrop-blur-md">
       <motion.div initial={{ scale: 0.88, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.88, y: 20, opacity: 0 }} className="w-full max-w-md overflow-hidden rounded-3xl border border-[#f5c842]/40 bg-[#1a120a] p-8 text-center shadow-[0_0_100px_rgba(245,200,66,0.2)]">
@@ -1518,10 +1535,16 @@ function SuccessModal({ lastTxid, onClose }: { lastTxid: string; onClose: () => 
           <Check size={40} className="text-black" strokeWidth={3} />
         </div>
         <h2 className="font-cinzel-decorative text-2xl uppercase tracking-widest text-[#f5c842]">Inscription Sent</h2>
-        <p className="mt-3 text-sm leading-7 text-[#9c793c]">Your inscription was submitted and added to your profile history.</p>
-        <div className="my-6 flex items-center justify-center gap-4 rounded-2xl border border-[#3a2808] bg-black/40 p-4">
+        <p className="mt-3 text-sm leading-7 text-[#9c793c]">Your inscription was submitted and is indexing on your profile and the public museum.</p>
+        <div className="my-6 rounded-2xl border border-[#3a2808] bg-black/40 p-4">
+          <div className="mb-4 text-left">
+            <p className="font-cinzel text-[0.58rem] uppercase tracking-widest text-[#6f501f]">Inscription ID</p>
+            <p className="mt-2 break-all font-mono text-xs leading-5 text-[#f5c842]">{visibleInscriptionId}</p>
+          </div>
+          <div className="flex items-center justify-center gap-4">
           <a href={`https://mempool.space/tx/${lastTxid}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.65rem] uppercase tracking-widest text-[#c9a040] hover:text-[#f5c842]">View Tx <ExternalLink size={10} /></a>
-          <a href={`https://ord.io/${lastTxid.includes('i') ? lastTxid : `${lastTxid}i0`}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.65rem] uppercase tracking-widest text-[#c9a040] hover:text-[#f5c842]">View Ord <ExternalLink size={10} /></a>
+          <a href={`https://ord.io/${visibleInscriptionId}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.65rem] uppercase tracking-widest text-[#c9a040] hover:text-[#f5c842]">View Ord <ExternalLink size={10} /></a>
+          </div>
         </div>
         <button onClick={onClose} className="w-full rounded-xl bg-gradient-to-r from-[#c9a040] to-[#f5c842] py-4 font-cinzel text-[0.8rem] font-bold uppercase tracking-[0.2em] text-black">
           Back to App
