@@ -12,6 +12,7 @@
     color: #e8d5a3;
     font-family: 'Lora', Georgia, serif;
     overflow-x: hidden;
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
   }
 }
 
@@ -135,6 +136,11 @@
 
 .commercial-progress {
   animation: commercial-progress 3s linear both;
+}
+
+.bottom-app-nav {
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  box-shadow: 0 -18px 54px rgba(0, 0, 0, 0.48);
 }
 
 @keyframes commercial-slide-in {

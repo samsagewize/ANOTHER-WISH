@@ -19,6 +19,7 @@ import {
   Search,
   Send,
   ShieldCheck,
+  Sparkles,
   Upload,
   User,
   Wallet,
@@ -29,7 +30,8 @@ import { DEV_ADDR, SERVICE_FEE, fetchBalance, fetchFeeRates, fetchTxStatus, load
 import { OperationType, auth, collection, db, doc, handleFirestoreError, limit, onSnapshot, orderBy, query, setDoc, updateDoc } from './firebase';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 
-const MAX_FILE_SIZE = 60 * 1024;
+const MAX_FILE_SIZE = 500 * 1024;
+const MAX_FILE_SIZE_LABEL = '500KB';
 const MUSEUM_RESET_AT = 1779425915000;
 const ThreeWell = React.lazy(() => import('./components/ThreeWell').then((module) => ({ default: module.ThreeWell })));
 
@@ -199,6 +201,12 @@ export default function App() {
     setPage('about');
   };
 
+  const goInscribe = () => {
+    window.history.pushState({}, '', '/');
+    setPage('home');
+    setTab('inscribe');
+  };
+
   const lookupBrcTicker = async (tickerValue = brcTicker) => {
     const cleanTicker = tickerValue.trim();
     if (!/^[A-Za-z0-9]{4}$/.test(cleanTicker)) {
@@ -305,7 +313,7 @@ export default function App() {
 
   const handleFile = (file: File) => {
     if (file.size > MAX_FILE_SIZE) {
-      setStatus({ type: 'err', msg: 'File is too large. Keep inscriptions under 60KB for this launch.' });
+      setStatus({ type: 'err', msg: `File is too large. Keep inscriptions under ${MAX_FILE_SIZE_LABEL} for this launch.` });
       return;
     }
     setSelFile(file);
@@ -523,6 +531,17 @@ export default function App() {
         </div>
       </nav>
 
+      <BottomAppNav
+        page={page}
+        tab={tab}
+        walletCount={walletInscriptions.length}
+        onHome={goHome}
+        onInscribe={goInscribe}
+        onProfile={goProfile}
+        onAbout={goAbout}
+        onBrc={goBrc}
+      />
+
       {page === 'profile' ? (
         <ProfilePage
           wallet={wallet}
@@ -664,6 +683,7 @@ export default function App() {
                 onWishText={setWishText}
                 onSelRate={setSelRate}
                 onCustomRate={setCustomRate}
+                maxFileSizeLabel={MAX_FILE_SIZE_LABEL}
                 onConnect={() => setShowWalletSelect(true)}
                 onDisconnect={disconnectWallet}
                 onInscribe={handleInscribe}
@@ -732,6 +752,54 @@ export default function App() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+function BottomAppNav({
+  page,
+  tab,
+  walletCount,
+  onHome,
+  onInscribe,
+  onProfile,
+  onAbout,
+  onBrc,
+}: {
+  page: 'home' | 'profile' | 'brc' | 'about';
+  tab: 'inscribe' | 'profile';
+  walletCount: number;
+  onHome: () => void;
+  onInscribe: () => void;
+  onProfile: () => void;
+  onAbout: () => void;
+  onBrc: () => void;
+}) {
+  const items = [
+    { label: 'Home', icon: <Sparkles size={18} />, active: page === 'home' && tab !== 'inscribe', onClick: onHome },
+    { label: 'Inscribe', icon: <Coins size={18} />, active: page === 'home' && tab === 'inscribe', onClick: onInscribe },
+    { label: 'Profile', icon: <History size={18} />, active: page === 'profile', onClick: onProfile, count: walletCount },
+    { label: 'About', icon: <MessageCircle size={18} />, active: page === 'about', onClick: onAbout },
+    { label: 'BRC', icon: <Search size={18} />, active: page === 'brc', onClick: onBrc },
+  ];
+
+  return (
+    <nav className="bottom-app-nav fixed inset-x-0 bottom-0 z-[9998] border-t border-[#3a2808]/80 bg-[#070401]/94 px-2 py-2 backdrop-blur-xl" aria-label="App navigation">
+      <div className="mx-auto grid max-w-2xl grid-cols-5 gap-1">
+        {items.map((item) => (
+          <button
+            key={item.label}
+            onClick={item.onClick}
+            className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 font-cinzel text-[0.55rem] font-bold uppercase tracking-wider transition ${item.active ? 'bg-[#f5c842]/12 text-[#f5c842]' : 'text-[#7a5a25] hover:bg-[#f5c842]/8 hover:text-[#c9a040]'}`}
+          >
+            {item.icon}
+            <span className="truncate">{item.label}</span>
+            {item.count ? (
+              <span className="absolute right-2 top-1 rounded-full bg-[#f5c842] px-1.5 font-mono text-[0.5rem] text-black">{item.count}</span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+    </nav>
   );
 }
 
@@ -1279,6 +1347,7 @@ function InscribePanel(props: {
   netFee: number;
   totalFee: number;
   canInscribe: boolean;
+  maxFileSizeLabel: string;
   onFile: (file: File) => void;
   onRemoveFile: () => void;
   onWishText: (value: string) => void;
@@ -1301,7 +1370,7 @@ function InscribePanel(props: {
             <input type="file" onChange={(e) => e.target.files?.[0] && props.onFile(e.target.files[0])} className="absolute inset-0 cursor-pointer opacity-0" />
             <Upload className="mx-auto mb-3 text-[#c9a040]" size={30} />
             <div className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#d8b55b]">Upload content</div>
-            <p className="mt-2 text-sm leading-6 text-[#7a5a25]">PNG, JPG, GIF, WEBP, MP3, WAV, HTML, CSS, JS, JSON, TXT, MD. Max 60KB.</p>
+            <p className="mt-2 text-sm leading-6 text-[#7a5a25]">PNG, JPG, GIF, WEBP, MP3, WAV, HTML, CSS, JS, JSON, TXT, MD. Max {props.maxFileSizeLabel}.</p>
           </label>
         ) : (
           <div className="mb-4 flex items-center gap-3 rounded-2xl border border-[#3a2808] bg-black/25 p-4">
