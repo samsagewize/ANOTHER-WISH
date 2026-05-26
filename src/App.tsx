@@ -50,7 +50,8 @@ type BrcLookup = {
 
 export default function App() {
   const [tab, setTab] = useState<'inscribe' | 'profile'>('inscribe');
-  const [page, setPage] = useState<'home' | 'profile' | 'brc' | 'about'>(() => {
+  const [page, setPage] = useState<'welcome' | 'home' | 'profile' | 'brc' | 'about'>(() => {
+    if (window.location.pathname === '/welcome') return 'welcome';
     if (window.location.pathname === '/profile') return 'profile';
     if (window.location.pathname === '/brc') return 'brc';
     if (window.location.pathname === '/about') return 'about';
@@ -81,7 +82,8 @@ export default function App() {
 
   useEffect(() => {
     const syncPage = () => {
-      if (window.location.pathname === '/profile') setPage('profile');
+      if (window.location.pathname === '/welcome') setPage('welcome');
+      else if (window.location.pathname === '/profile') setPage('profile');
       else if (window.location.pathname === '/brc') setPage('brc');
       else if (window.location.pathname === '/about') setPage('about');
       else setPage('home');
@@ -178,8 +180,8 @@ export default function App() {
   }, [profiles, wallet]);
 
   const goHome = () => {
-    window.history.pushState({}, '', '/');
-    setPage('home');
+    window.history.pushState({}, '', '/welcome');
+    setPage('welcome');
   };
 
   const goProfile = () => {
@@ -498,7 +500,7 @@ export default function App() {
             Bitcoin Wishing Well
           </a>
           <div className="flex items-center gap-2">
-            <button onClick={goHome} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'home' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
+            <button onClick={goHome} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'welcome' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
               Home
             </button>
             <button onClick={goProfile} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'profile' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
@@ -556,10 +558,7 @@ export default function App() {
           onSearch={setHistorySearch}
           onConnect={() => setShowWalletSelect(true)}
           onHome={goHome}
-          onCast={() => {
-            goHome();
-            setTab('inscribe');
-          }}
+          onCast={goInscribe}
         />
       ) : page === 'brc' ? (
         <BrcPage
@@ -571,88 +570,33 @@ export default function App() {
           onLookup={lookupBrcTicker}
           onHome={goHome}
         />
+      ) : page === 'welcome' ? (
+        <WelcomePage
+          profiles={profiles}
+          inscriptions={inscriptions}
+          wallet={wallet}
+          walletInscriptions={walletInscriptions}
+          currentRate={currentRate}
+          profile={wallet ? profiles[wallet.ordAddr] : undefined}
+          draft={profileDraft}
+          confirmed={confirmedCount}
+          pending={pendingCount}
+          balance={wallet?.balance || 0}
+          onCast={goInscribe}
+          onProfile={goProfile}
+          onConnect={() => setShowWalletSelect(true)}
+          onRefresh={refreshBalance}
+          onDraft={setProfileDraft}
+          onSave={saveProfile}
+        />
       ) : page === 'about' ? (
         <AboutPage
           onHome={goHome}
-          onCast={() => {
-            goHome();
-            setTab('inscribe');
-          }}
+          onCast={goInscribe}
         />
       ) : (
       <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
-        <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_430px] lg:items-stretch">
-          <div className="overflow-hidden rounded-[28px] border border-[#3a2808] bg-[#100904]/88 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
-            <div className="grid min-h-[520px] lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,1.05fr)]">
-              <div className="relative min-h-[320px] overflow-hidden bg-black lg:min-h-full">
-                <React.Suspense fallback={<div className="h-full min-h-[320px] bg-[radial-gradient(circle_at_center,#1a1208,#020202_70%)]" />}>
-                  <ThreeWell onPlunge={() => setTab('inscribe')} compact />
-                </React.Suspense>
-                <div className="well-welcome pointer-events-none absolute inset-0 z-10 flex items-end justify-center p-6">
-                  <span className="falling-wish-token">wish</span>
-                  <div className="rounded-2xl border border-[#f5c842]/30 bg-black/55 px-5 py-3 text-center shadow-[0_0_34px_rgba(245,200,66,0.16)] backdrop-blur-sm">
-                    <p className="font-cinzel-decorative text-lg tracking-widest text-[#f5c842] sm:text-xl">Welcome to the Wishing Well</p>
-                    <p className="mt-1 font-cinzel text-[0.58rem] uppercase tracking-[0.2em] text-[#9c793c]">fall in, inscribe, index forever</p>
-                  </div>
-                </div>
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/10 via-transparent to-[#100904] lg:bg-gradient-to-r" />
-              </div>
-
-              <div className="flex flex-col justify-center p-6 sm:p-8">
-                <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-[#f5c842]/20 bg-[#f5c842]/8 px-3 py-1 font-cinzel text-[0.62rem] uppercase tracking-[0.22em] text-[#c9a040]">
-                  <ShieldCheck size={13} /> Bitcoin Ordinals
-                </div>
-                <h1 className="font-cinzel-decorative text-[clamp(2rem,5vw,4.2rem)] leading-tight tracking-widest text-[#f5c842]">
-                  Welcome to the Wishing Well
-                </h1>
-                <p className="mt-4 max-w-xl text-[1rem] leading-8 text-[#b89655]">
-                  Drop code, images, songs, and art into Bitcoin. Every wish made here is indexed to your ordinal profile and the public museum with a visible inscription ID.
-                </p>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <Pill icon={<Code2 size={13} />} label="Code" />
-                  <Pill icon={<ImageIcon size={13} />} label="Images" />
-                  <Pill icon={<Music size={13} />} label="Songs" />
-                  <Pill icon={<Palette size={13} />} label="Art" />
-                </div>
-
-                <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <Stat label="Profiles reached" value={Object.keys(profiles).length.toLocaleString()} />
-                  <Stat label="Wishing Well" value={inscriptions.length.toLocaleString()} />
-                  <Stat label="Your history" value={wallet ? walletInscriptions.length.toLocaleString() : '--'} />
-                  <Stat label="Fee rate" value={`${currentRate} s/vB`} />
-                </div>
-
-                <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                  <button onClick={() => setTab('inscribe')} className="rounded-xl bg-gradient-to-r from-[#f5c842] to-[#c9a040] px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-black shadow-[0_0_28px_rgba(245,200,66,0.22)] transition hover:brightness-110">
-                    Start Inscribing
-                  </button>
-                  <button onClick={goProfile} className="rounded-xl border border-[#3a2808] bg-black/35 px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-[#c9a040] transition hover:border-[#f5c842]/35 hover:text-[#f5c842]">
-                    View Profile History
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <aside className="grid gap-4">
-            <ProfileSummary
-              wallet={wallet}
-              profile={wallet ? profiles[wallet.ordAddr] : undefined}
-              draft={profileDraft}
-              total={walletInscriptions.length}
-              confirmed={confirmedCount}
-              pending={pendingCount}
-              balance={wallet?.balance || 0}
-              onConnect={() => setShowWalletSelect(true)}
-              onRefresh={refreshBalance}
-              onDraft={setProfileDraft}
-              onSave={saveProfile}
-            />
-            <SafetyPanel />
-          </aside>
-        </section>
-
-        <section className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,0.98fr)_minmax(360px,0.72fr)]">
+        <section className="grid gap-5 lg:grid-cols-[minmax(0,0.98fr)_minmax(360px,0.72fr)]">
           <div className="rounded-2xl border border-[#3a2808] bg-[#100904]/88 p-4 shadow-[0_20px_70px_rgba(0,0,0,0.28)] sm:p-5">
             <div className="mb-5 grid grid-cols-2 gap-2 rounded-xl border border-[#221508] bg-black/35 p-1">
               <button onClick={() => setTab('inscribe')} className={`flex items-center justify-center gap-2 rounded-lg py-2.5 font-cinzel text-[0.7rem] font-bold uppercase tracking-widest transition ${tab === 'inscribe' ? 'border border-[#f5c842]/25 bg-[#f5c842]/12 text-[#f5c842]' : 'text-[#7a5a25] hover:text-[#c9a040]'}`}>
@@ -755,6 +699,117 @@ export default function App() {
   );
 }
 
+function WelcomePage({
+  profiles,
+  inscriptions,
+  wallet,
+  walletInscriptions,
+  currentRate,
+  profile,
+  draft,
+  confirmed,
+  pending,
+  balance,
+  onCast,
+  onProfile,
+  onConnect,
+  onRefresh,
+  onDraft,
+  onSave,
+}: {
+  profiles: Record<string, Profile>;
+  inscriptions: Inscription[];
+  wallet: { type: WalletType; ordAddr: string; payAddr: string; balance: number } | null;
+  walletInscriptions: Inscription[];
+  currentRate: number;
+  profile?: Profile;
+  draft: { displayName: string; avatarUrl: string; twitterUrl: string; bio: string };
+  confirmed: number;
+  pending: number;
+  balance: number;
+  onCast: () => void;
+  onProfile: () => void;
+  onConnect: () => void;
+  onRefresh: () => void;
+  onDraft: (next: { displayName: string; avatarUrl: string; twitterUrl: string; bio: string }) => void;
+  onSave: () => void;
+}) {
+  return (
+    <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_430px] lg:items-stretch">
+        <div className="overflow-hidden rounded-[28px] border border-[#3a2808] bg-[#100904]/88 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
+          <div className="grid min-h-[620px] lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,1.05fr)]">
+            <div className="relative min-h-[420px] overflow-hidden bg-black lg:min-h-full">
+              <React.Suspense fallback={<div className="h-full min-h-[420px] bg-[radial-gradient(circle_at_center,#1a1208,#020202_70%)]" />}>
+                <ThreeWell onPlunge={onCast} compact />
+              </React.Suspense>
+              <div className="well-welcome pointer-events-none absolute inset-0 z-10 flex items-end justify-center p-6">
+                <span className="falling-wish-token">wish</span>
+                <div className="rounded-2xl border border-[#f5c842]/30 bg-black/55 px-5 py-3 text-center shadow-[0_0_34px_rgba(245,200,66,0.16)] backdrop-blur-sm">
+                  <p className="font-cinzel-decorative text-lg tracking-widest text-[#f5c842] sm:text-xl">Welcome to the Wishing Well</p>
+                  <p className="mt-1 font-cinzel text-[0.58rem] uppercase tracking-[0.2em] text-[#9c793c]">fall in, inscribe, index forever</p>
+                </div>
+              </div>
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/10 via-transparent to-[#100904] lg:bg-gradient-to-r" />
+            </div>
+
+            <div className="flex flex-col justify-center p-6 sm:p-8">
+              <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-[#f5c842]/20 bg-[#f5c842]/8 px-3 py-1 font-cinzel text-[0.62rem] uppercase tracking-[0.22em] text-[#c9a040]">
+                <ShieldCheck size={13} /> Bitcoin Ordinals
+              </div>
+              <h1 className="font-cinzel-decorative text-[clamp(2rem,5vw,4.2rem)] leading-tight tracking-widest text-[#f5c842]">
+                Welcome to the Wishing Well
+              </h1>
+              <p className="mt-4 max-w-xl text-[1rem] leading-8 text-[#b89655]">
+                Drop code, images, songs, and art into Bitcoin. Every wish made here is indexed to your ordinal profile and the public museum with a visible inscription ID.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Pill icon={<Code2 size={13} />} label="Code" />
+                <Pill icon={<ImageIcon size={13} />} label="Images" />
+                <Pill icon={<Music size={13} />} label="Songs" />
+                <Pill icon={<Palette size={13} />} label="Art" />
+              </div>
+
+              <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <Stat label="Profiles reached" value={Object.keys(profiles).length.toLocaleString()} />
+                <Stat label="Wishing Well" value={inscriptions.length.toLocaleString()} />
+                <Stat label="Your history" value={wallet ? walletInscriptions.length.toLocaleString() : '--'} />
+                <Stat label="Fee rate" value={`${currentRate} s/vB`} />
+              </div>
+
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+                <button onClick={onCast} className="rounded-xl bg-gradient-to-r from-[#f5c842] to-[#c9a040] px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-black shadow-[0_0_28px_rgba(245,200,66,0.22)] transition hover:brightness-110">
+                  Start Inscribing
+                </button>
+                <button onClick={onProfile} className="rounded-xl border border-[#3a2808] bg-black/35 px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-[#c9a040] transition hover:border-[#f5c842]/35 hover:text-[#f5c842]">
+                  View Profile History
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside className="grid gap-4">
+          <ProfileSummary
+            wallet={wallet}
+            profile={profile}
+            draft={draft}
+            total={walletInscriptions.length}
+            confirmed={confirmed}
+            pending={pending}
+            balance={balance}
+            onConnect={onConnect}
+            onRefresh={onRefresh}
+            onDraft={onDraft}
+            onSave={onSave}
+          />
+          <SafetyPanel />
+        </aside>
+      </section>
+    </main>
+  );
+}
+
 function BottomAppNav({
   page,
   tab,
@@ -765,7 +820,7 @@ function BottomAppNav({
   onAbout,
   onBrc,
 }: {
-  page: 'home' | 'profile' | 'brc' | 'about';
+  page: 'welcome' | 'home' | 'profile' | 'brc' | 'about';
   tab: 'inscribe' | 'profile';
   walletCount: number;
   onHome: () => void;
@@ -775,7 +830,7 @@ function BottomAppNav({
   onBrc: () => void;
 }) {
   const items = [
-    { label: 'Home', icon: <Sparkles size={18} />, active: page === 'home' && tab !== 'inscribe', onClick: onHome },
+    { label: 'Home', icon: <Sparkles size={18} />, active: page === 'welcome', onClick: onHome },
     { label: 'Inscribe', icon: <Coins size={18} />, active: page === 'home' && tab === 'inscribe', onClick: onInscribe },
     { label: 'Profile', icon: <History size={18} />, active: page === 'profile', onClick: onProfile, count: walletCount },
     { label: 'About', icon: <MessageCircle size={18} />, active: page === 'about', onClick: onAbout },
