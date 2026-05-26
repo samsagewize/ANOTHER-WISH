@@ -577,17 +577,8 @@ export default function App() {
           wallet={wallet}
           walletInscriptions={walletInscriptions}
           currentRate={currentRate}
-          profile={wallet ? profiles[wallet.ordAddr] : undefined}
-          draft={profileDraft}
-          confirmed={confirmedCount}
-          pending={pendingCount}
-          balance={wallet?.balance || 0}
           onCast={goInscribe}
           onProfile={goProfile}
-          onConnect={() => setShowWalletSelect(true)}
-          onRefresh={refreshBalance}
-          onDraft={setProfileDraft}
-          onSave={saveProfile}
         />
       ) : page === 'about' ? (
         <AboutPage
@@ -705,108 +696,76 @@ function WelcomePage({
   wallet,
   walletInscriptions,
   currentRate,
-  profile,
-  draft,
-  confirmed,
-  pending,
-  balance,
   onCast,
   onProfile,
-  onConnect,
-  onRefresh,
-  onDraft,
-  onSave,
 }: {
   profiles: Record<string, Profile>;
   inscriptions: Inscription[];
   wallet: { type: WalletType; ordAddr: string; payAddr: string; balance: number } | null;
   walletInscriptions: Inscription[];
   currentRate: number;
-  profile?: Profile;
-  draft: { displayName: string; avatarUrl: string; twitterUrl: string; bio: string };
-  confirmed: number;
-  pending: number;
-  balance: number;
   onCast: () => void;
   onProfile: () => void;
-  onConnect: () => void;
-  onRefresh: () => void;
-  onDraft: (next: { displayName: string; avatarUrl: string; twitterUrl: string; bio: string }) => void;
-  onSave: () => void;
 }) {
   return (
-    <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_430px] lg:items-stretch">
-        <div className="overflow-hidden rounded-[28px] border border-[#3a2808] bg-[#100904]/88 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
-          <div className="grid min-h-[620px] lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,1.05fr)]">
-            <div className="relative min-h-[420px] overflow-hidden bg-black lg:min-h-full">
-              <React.Suspense fallback={<div className="h-full min-h-[420px] bg-[radial-gradient(circle_at_center,#1a1208,#020202_70%)]" />}>
-                <ThreeWell onPlunge={onCast} compact />
-              </React.Suspense>
-              <div className="well-welcome pointer-events-none absolute inset-0 z-10 flex items-end justify-center p-6">
-                <span className="falling-wish-token">wish</span>
-                <div className="rounded-2xl border border-[#f5c842]/30 bg-black/55 px-5 py-3 text-center shadow-[0_0_34px_rgba(245,200,66,0.16)] backdrop-blur-sm">
-                  <p className="font-cinzel-decorative text-lg tracking-widest text-[#f5c842] sm:text-xl">Welcome to the Wishing Well</p>
-                  <p className="mt-1 font-cinzel text-[0.58rem] uppercase tracking-[0.2em] text-[#9c793c]">fall in, inscribe, index forever</p>
-                </div>
-              </div>
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/10 via-transparent to-[#100904] lg:bg-gradient-to-r" />
-            </div>
-
-            <div className="flex flex-col justify-center p-6 sm:p-8">
-              <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-[#f5c842]/20 bg-[#f5c842]/8 px-3 py-1 font-cinzel text-[0.62rem] uppercase tracking-[0.22em] text-[#c9a040]">
-                <ShieldCheck size={13} /> Bitcoin Ordinals
-              </div>
-              <h1 className="font-cinzel-decorative text-[clamp(2rem,5vw,4.2rem)] leading-tight tracking-widest text-[#f5c842]">
-                Welcome to the Wishing Well
-              </h1>
-              <p className="mt-4 max-w-xl text-[1rem] leading-8 text-[#b89655]">
-                Drop code, images, songs, and art into Bitcoin. Every wish made here is indexed to your ordinal profile and the public museum with a visible inscription ID.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                <Pill icon={<Code2 size={13} />} label="Code" />
-                <Pill icon={<ImageIcon size={13} />} label="Images" />
-                <Pill icon={<Music size={13} />} label="Songs" />
-                <Pill icon={<Palette size={13} />} label="Art" />
-              </div>
-
-              <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <Stat label="Profiles reached" value={Object.keys(profiles).length.toLocaleString()} />
-                <Stat label="Wishing Well" value={inscriptions.length.toLocaleString()} />
-                <Stat label="Your history" value={wallet ? walletInscriptions.length.toLocaleString() : '--'} />
-                <Stat label="Fee rate" value={`${currentRate} s/vB`} />
-              </div>
-
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <button onClick={onCast} className="rounded-xl bg-gradient-to-r from-[#f5c842] to-[#c9a040] px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-black shadow-[0_0_28px_rgba(245,200,66,0.22)] transition hover:brightness-110">
-                  Start Inscribing
-                </button>
-                <button onClick={onProfile} className="rounded-xl border border-[#3a2808] bg-black/35 px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-[#c9a040] transition hover:border-[#f5c842]/35 hover:text-[#f5c842]">
-                  View Profile History
-                </button>
-              </div>
-            </div>
+    <main className="relative z-10 mx-auto grid min-h-[calc(100vh-150px)] max-w-7xl place-items-center px-4 py-6 sm:px-6 lg:py-8">
+      <section className="grid w-full gap-8 lg:grid-cols-[minmax(320px,0.95fr)_minmax(0,1.05fr)] lg:items-center">
+        <div className="relative min-h-[420px] overflow-hidden rounded-[18px] border border-[#3a2808] bg-black shadow-[0_24px_90px_rgba(0,0,0,0.42)] lg:min-h-[640px]">
+          <React.Suspense fallback={<div className="h-full min-h-[420px] bg-[radial-gradient(circle_at_center,#1a1208,#020202_70%)]" />}>
+            <ThreeWell onPlunge={onCast} compact />
+          </React.Suspense>
+          <div className="well-welcome pointer-events-none absolute inset-0 z-10 flex items-end justify-center p-6">
+            <span className="falling-wish-token">wish</span>
+            <p className="rounded-full border border-[#f5c842]/25 bg-black/55 px-4 py-2 font-cinzel text-[0.62rem] uppercase tracking-[0.22em] text-[#c9a040] shadow-[0_0_34px_rgba(245,200,66,0.16)] backdrop-blur-sm">
+              fall in, inscribe forever
+            </p>
           </div>
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/10" />
         </div>
 
-        <aside className="grid gap-4">
-          <ProfileSummary
-            wallet={wallet}
-            profile={profile}
-            draft={draft}
-            total={walletInscriptions.length}
-            confirmed={confirmed}
-            pending={pending}
-            balance={balance}
-            onConnect={onConnect}
-            onRefresh={onRefresh}
-            onDraft={onDraft}
-            onSave={onSave}
-          />
-          <SafetyPanel />
-        </aside>
+        <div className="mx-auto max-w-2xl lg:mx-0">
+          <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-[#f5c842]/20 bg-[#f5c842]/8 px-3 py-1 font-cinzel text-[0.62rem] uppercase tracking-[0.22em] text-[#c9a040]">
+            <ShieldCheck size={13} /> Bitcoin Ordinals
+          </div>
+          <h1 className="font-cinzel-decorative text-[clamp(2.5rem,7vw,5.6rem)] leading-none tracking-widest text-[#f5c842]">
+            The Wishing Well
+          </h1>
+          <p className="mt-5 max-w-xl text-[1rem] leading-8 text-[#b89655]">
+            Inscribe a wish on Bitcoin. Keep it simple, see the fee, and find the inscription ID in your profile and the museum.
+          </p>
+
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <button onClick={onCast} className="rounded-xl bg-gradient-to-r from-[#f5c842] to-[#c9a040] px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-black shadow-[0_0_28px_rgba(245,200,66,0.22)] transition hover:brightness-110">
+              Start Inscribing
+            </button>
+            <button onClick={onProfile} className="rounded-xl border border-[#3a2808] bg-black/35 px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-[#c9a040] transition hover:border-[#f5c842]/35 hover:text-[#f5c842]">
+              Profile
+            </button>
+          </div>
+
+          <div className="mt-10 grid grid-cols-3 gap-3 border-t border-[#3a2808] pt-5">
+            <MinimalStat label="wishes" value={inscriptions.length.toLocaleString()} />
+            <MinimalStat label="profiles" value={Object.keys(profiles).length.toLocaleString()} />
+            <MinimalStat label="fee" value={`${currentRate} s/vB`} />
+          </div>
+
+          {wallet && (
+            <p className="mt-5 font-mono text-xs text-[#7a5a25]">
+              Connected: {wallet.ordAddr.slice(0, 8)}...{wallet.ordAddr.slice(-8)} · {walletInscriptions.length} indexed
+            </p>
+          )}
+        </div>
       </section>
     </main>
+  );
+}
+
+function MinimalStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="font-mono text-lg text-[#f5c842]">{value}</div>
+      <div className="mt-1 font-cinzel text-[0.54rem] uppercase tracking-widest text-[#6f501f]">{label}</div>
+    </div>
   );
 }
 
