@@ -225,10 +225,10 @@ export const ThreeWell: React.FC<{ onPlunge: () => void; compact?: boolean }> = 
       <div className={`intro-overlay absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none p-8 ${compact ? 'hidden' : ''}`}>
         <div className="intro-title text-center">
           <h1 className="font-cinzel-decorative text-[clamp(1.7rem,5.5vw,3.4rem)] text-[#f5c842] tracking-widest leading-tight mb-2">
-            Bitcoin<br />Wishing Well
+            BTC Inscriber
           </h1>
           <p className="font-lora italic text-[clamp(0.8rem,2.2vw,1.05rem)] text-[#a08050] tracking-wider">
-            Inscribe your wish forever on the eternal ledger
+            Inscribe on Bitcoin
           </p>
         </div>
         <div className="intro-badge inline-flex flex-col items-center gap-2 bg-[rgba(245,200,66,0.07)] border border-[rgba(245,200,66,0.22)] rounded-2xl px-5 py-3 font-cinzel text-[0.68rem] text-[#c9a040] tracking-widest uppercase mt-6 mb-10">

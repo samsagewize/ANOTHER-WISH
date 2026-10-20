@@ -1,5 +1,5 @@
 {
-  "name": "Bitcoin Wishing Well",
-  "description": "Cast your wish into the eternal Bitcoin ledger. Inscribe images, text, and files as Ordinals on Bitcoin mainnet.",
+  "name": "BTC Inscriber",
+  "description": "Inscribe text and small files as Ordinals on Bitcoin mainnet.",
   "requestFramePermissions": []
 }

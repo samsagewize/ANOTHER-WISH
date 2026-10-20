@@ -1,162 +1,53 @@
 @import "tailwindcss";
 
 @theme {
-  --font-cinzel: "Cinzel", serif;
-  --font-cinzel-decorative: "Cinzel Decorative", serif;
-  --font-lora: "Lora", serif;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-paper: #f6f5f2;
+  --color-ink: #1c1b19;
+  --color-muted: #5e5a54;
+  --color-rule: #e4e0d8;
+  --color-brand: #9a3412;
+  --color-good: #166534;
+  --color-bad: #991b1b;
 }
 
 @layer base {
   body {
-    background: #000;
-    color: #e8d5a3;
-    font-family: 'Lora', Georgia, serif;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
-    padding-bottom: calc(76px + env(safe-area-inset-bottom));
   }
-}
 
-.nav-logo {
-  font-family: 'Cinzel Decorative', serif;
-  text-shadow: 0 0 24px rgba(245, 200, 66, 0.35);
-}
-
-.nav-live::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #50d070;
-  animation: blink 2s ease-in-out infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: .4; }
-  50% { opacity: 1; }
-}
-
-.intro-title h1 {
-  font-family: 'Cinzel Decorative', serif;
-  text-shadow: 0 0 70px rgba(245, 200, 66, 0.7), 0 0 140px rgba(245, 200, 66, 0.3), 0 2px 16px rgba(0, 0, 0, .95);
-}
-
-@keyframes hp {
-  0%, 100% { opacity: .3; }
-  50% { opacity: 1; }
-}
-
-.panel::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 10%;
-  right: 10%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(245, 200, 66, 0.42), transparent);
-}
-
-.inscribe-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(160deg, rgba(255, 230, 100, .15) 0%, transparent 100%);
-  opacity: 0;
-  transition: opacity .3s;
-}
-
-.ins-card::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(245, 200, 66, 0.18), transparent);
-}
-
-.well-welcome {
-  background:
-    radial-gradient(circle at 50% 78%, rgba(245, 200, 66, 0.16), transparent 18%),
-    linear-gradient(180deg, transparent 46%, rgba(0, 0, 0, 0.58));
-}
-
-.falling-wish-token {
-  position: absolute;
-  left: 50%;
-  top: -3.5rem;
-  display: grid;
-  width: 3.5rem;
-  height: 3.5rem;
-  place-items: center;
-  border: 1px solid rgba(245, 200, 66, 0.82);
-  border-radius: 999px;
-  background: radial-gradient(circle at 35% 25%, #fff0a8, #f5c842 54%, #8a5c12);
-  color: #130a02;
-  font-family: 'Cinzel', serif;
-  font-size: 0.62rem;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  box-shadow: 0 0 26px rgba(245, 200, 66, 0.34);
-  animation: wishing-well-drop 4.4s cubic-bezier(0.52, 0, 0.34, 1) infinite;
-}
-
-@keyframes wishing-well-drop {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -1rem) scale(0.78);
+  dd {
+    margin: 0;
   }
-  14% {
-    opacity: 1;
+
+  ::selection {
+    background: var(--color-ink);
+    color: var(--color-paper);
   }
-  70% {
-    opacity: 1;
-    transform: translate(-50%, min(24rem, 58vh)) scale(1);
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 3px;
   }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, min(29rem, 68vh)) scale(0.45);
+
+  @media (max-width: 639px) {
+    body {
+      padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+    }
   }
-}
 
-.commercial-frame::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(120deg, transparent 0%, rgba(245, 200, 66, 0.08) 45%, transparent 62%),
-    repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 7px);
-  mix-blend-mode: screen;
-}
-
-.commercial-slide {
-  animation: commercial-slide-in 0.62s ease both;
-}
-
-.commercial-progress {
-  animation: commercial-progress 3s linear both;
-}
-
-.bottom-app-nav {
-  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
-  box-shadow: 0 -18px 54px rgba(0, 0, 0, 0.48);
-}
-
-@keyframes commercial-slide-in {
-  0% {
-    opacity: 0;
-    transform: translateY(18px) scale(0.985);
-    filter: blur(7px);
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
-  }
-}
-
-@keyframes commercial-progress {
-  0% { width: 0%; }
-  100% { width: 100%; }
 }

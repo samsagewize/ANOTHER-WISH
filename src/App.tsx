@@ -1,30 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
-import {
-  AlertTriangle,
-  AtSign,
-  Check,
-  Clock,
-  Code2,
-  Coins,
-  ExternalLink,
-  FileText,
-  History,
-  Image as ImageIcon,
-  LogOut,
-  MessageCircle,
-  Music,
-  Palette,
-  RefreshCw,
-  Search,
-  Send,
-  ShieldCheck,
-  Sparkles,
-  Upload,
-  User,
-  Wallet,
-  X,
-} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChatMessage, FeeRates, FeeTier, Inscription, Profile, WalletType } from './types';
 import { DEV_ADDR, SERVICE_FEE, fetchBalance, fetchFeeRates, fetchTxStatus, loadSatsConnect, toB64 } from './services/bitcoinService';
 import { OperationType, auth, collection, db, doc, handleFirestoreError, limit, onSnapshot, orderBy, query, setDoc, updateDoc } from './firebase';
@@ -33,7 +7,11 @@ import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 const MAX_FILE_SIZE = 500 * 1024;
 const MAX_FILE_SIZE_LABEL = '500KB';
 const MUSEUM_RESET_AT = 1779425915000;
-const ThreeWell = React.lazy(() => import('./components/ThreeWell').then((module) => ({ default: module.ThreeWell })));
+
+const field = 'w-full border-b border-rule bg-transparent py-3 text-base text-ink outline-none placeholder:text-muted focus:border-ink';
+const label = 'mb-2 block text-xs text-muted';
+const primary = 'inline-flex h-11 items-center justify-center bg-brand px-5 text-sm font-medium text-white hover:bg-[#7f2a0f] disabled:cursor-not-allowed disabled:bg-rule disabled:text-muted';
+const textBtn = 'text-sm text-muted hover:text-ink';
 
 const inscriptionId = (ins: Inscription) => (ins.wishTxid.includes('i') ? ins.wishTxid : `${ins.wishTxid}i0`);
 const ordinalsContentUrl = (ins: Inscription) => `https://ordinals.com/content/${inscriptionId(ins)}`;
@@ -50,6 +28,7 @@ type BrcLookup = {
 
 export default function App() {
   const [tab, setTab] = useState<'inscribe' | 'profile'>('inscribe');
+  const [homeSection, setHomeSection] = useState<'inscribe' | 'museum' | 'chat'>('inscribe');
   const [page, setPage] = useState<'welcome' | 'home' | 'profile' | 'brc' | 'about'>(() => {
     if (window.location.pathname === '/welcome') return 'welcome';
     if (window.location.pathname === '/profile') return 'profile';
@@ -207,6 +186,7 @@ export default function App() {
     window.history.pushState({}, '', '/');
     setPage('home');
     setTab('inscribe');
+    setHomeSection('inscribe');
   };
 
   const lookupBrcTicker = async (tickerValue = brcTicker) => {
@@ -282,7 +262,7 @@ export default function App() {
       const { request, AddressPurpose } = sc;
       const resp = await request('wallet_connect', {
         addresses: [AddressPurpose.Ordinals, AddressPurpose.Payment],
-        message: 'Bitcoin Wishing Well - connect to inscribe on mainnet',
+        message: 'BTC Inscriber - connect to inscribe on mainnet',
         network: 'Mainnet',
       });
 
@@ -292,7 +272,7 @@ export default function App() {
         const pay = addrs.find((a: any) => a.purpose === AddressPurpose.Payment) || ord;
         const bal = await fetchBalance(pay.address);
         setWallet({ type: 'xverse', ordAddr: ord.address, payAddr: pay.address, balance: bal });
-        setStatus({ type: 'ok', msg: 'Wallet connected safely. No transaction, signature, or service fee was requested.' });
+        setStatus({ type: 'ok', msg: 'Connected. Nothing was signed.' });
       }
     } catch (err: any) {
       setStatus({ type: 'err', msg: 'Xverse connect failed: ' + err.message });
@@ -307,7 +287,7 @@ export default function App() {
       const accounts = await unisat.requestAccounts();
       const bal = await unisat.getBalance();
       setWallet({ type: 'unisat', ordAddr: accounts[0], payAddr: accounts[0], balance: bal.total });
-      setStatus({ type: 'ok', msg: 'UniSat connected safely. No transaction or signature was requested. Use Xverse for live inscriptions.' });
+      setStatus({ type: 'ok', msg: 'UniSat connected. Use Xverse to inscribe.' });
     } catch (err: any) {
       setStatus({ type: 'err', msg: 'UniSat connect failed: ' + err.message });
     }
@@ -315,7 +295,7 @@ export default function App() {
 
   const handleFile = (file: File) => {
     if (file.size > MAX_FILE_SIZE) {
-      setStatus({ type: 'err', msg: `File is too large. Keep inscriptions under ${MAX_FILE_SIZE_LABEL} for this launch.` });
+      setStatus({ type: 'err', msg: `File must be under ${MAX_FILE_SIZE_LABEL}.` });
       return;
     }
     setSelFile(file);
@@ -330,13 +310,13 @@ export default function App() {
 
     const twitterUrl = profileDraft.twitterUrl.trim();
     if (twitterUrl && !/^https:\/\/(x\.com|twitter\.com)\/[A-Za-z0-9_]{1,15}\/?$/.test(twitterUrl)) {
-      setStatus({ type: 'err', msg: 'Use a valid X/Twitter profile link like https://x.com/username.' });
+      setStatus({ type: 'err', msg: 'Use a link like https://x.com/username.' });
       return;
     }
 
     const avatarUrl = profileDraft.avatarUrl.trim();
     if (avatarUrl && !/^https:\/\/.+/i.test(avatarUrl)) {
-      setStatus({ type: 'err', msg: 'Use a secure image URL starting with https:// for your profile picture.' });
+      setStatus({ type: 'err', msg: 'Profile picture must be an https:// URL.' });
       return;
     }
 
@@ -351,7 +331,7 @@ export default function App() {
     };
 
     await setDoc(doc(db, 'profiles', wallet.ordAddr), profile);
-    setStatus({ type: 'ok', msg: 'Profile saved. Your Twitter link is now attached to this ordinal wallet.' });
+    setStatus({ type: 'ok', msg: 'Profile saved.' });
   };
 
   const sendMessage = async () => {
@@ -363,7 +343,7 @@ export default function App() {
     const text = chatText.trim();
     if (!text) return;
     if (text.length > 280) {
-      setStatus({ type: 'err', msg: 'Museum chat messages must be 280 characters or less.' });
+      setStatus({ type: 'err', msg: '280 characters max.' });
       return;
     }
 
@@ -463,7 +443,7 @@ export default function App() {
       }
 
       setLastTxid(newIns.wishTxid);
-      setStatus({ type: 'ok', msg: `Inscription ID ${inscriptionId(newIns)} is now indexing on your profile and the public museum.` });
+      setStatus({ type: 'ok', msg: `Inscribed. ID ${inscriptionId(newIns)} is indexing.` });
       setShowCongrats(true);
       setProgress(null);
       setTab('profile');
@@ -484,54 +464,45 @@ export default function App() {
       return;
     }
     if (!selFile && !wishText.trim()) {
-      setStatus({ type: 'err', msg: 'Add text or upload a file before inscribing.' });
+      setStatus({ type: 'err', msg: 'Add text or a file.' });
       return;
     }
     setShowConfirm(true);
   };
 
-  return (
-    <div className="min-h-screen bg-[#050403] text-[#e8d5a3] font-lora selection:bg-[#f5c842] selection:text-black">
-      <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_22%_12%,rgba(245,200,66,0.14),transparent_32%),radial-gradient(circle_at_80%_18%,rgba(80,168,96,0.08),transparent_28%),linear-gradient(180deg,#070401_0%,#0f0803_55%,#030201_100%)]" />
+  const homeTitle = homeSection === 'museum' ? 'Museum' : homeSection === 'chat' ? 'Chat' : tab === 'profile' ? 'History' : 'Inscribe';
 
-      <nav className="sticky top-0 z-[9999] border-b border-[#3a2808]/80 bg-[#070401]/92 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <a href="/" className="nav-logo font-cinzel-decorative text-sm tracking-widest text-[#f5c842] sm:text-base">
-            Bitcoin Wishing Well
-          </a>
-          <div className="flex items-center gap-2">
-            <button onClick={goHome} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'welcome' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
-              Home
-            </button>
-            <button onClick={goProfile} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'profile' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
-              Profile
-            </button>
-            <button onClick={goAbout} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'about' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
-              About
-            </button>
-            <button onClick={goBrc} className={`hidden rounded-lg border px-3 py-2 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest transition sm:block ${page === 'brc' ? 'border-[#f5c842]/35 bg-[#f5c842]/10 text-[#f5c842]' : 'border-[#3a2808] bg-black/35 text-[#7a5a25] hover:text-[#c9a040]'}`}>
-              BRC
-            </button>
-            <span className="nav-live hidden items-center gap-2 rounded-full border border-[#50a860]/30 bg-[#50a860]/10 px-3 py-1 font-cinzel text-[0.62rem] font-bold uppercase tracking-widest text-[#70d080] sm:flex">
-              Mainnet
-            </span>
+  return (
+    <div className="min-h-screen bg-paper text-ink">
+      <a href="#content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:bg-paper focus:px-3 focus:py-2">
+        Skip to content
+      </a>
+
+      <header className="sticky top-0 z-40 border-b border-rule bg-paper/95 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 px-5 py-4">
+          <a href="/" className="text-sm font-medium">BTC Inscriber</a>
+          <nav aria-label="Primary" className="hidden items-center gap-5 sm:flex">
+            <NavButton active={page === 'welcome'} onClick={goHome}>Home</NavButton>
+            <NavButton active={page === 'home'} onClick={goInscribe}>Inscribe</NavButton>
+            <NavButton active={page === 'profile'} onClick={goProfile}>Profile</NavButton>
+            <NavButton active={page === 'about'} onClick={goAbout}>About</NavButton>
+            <NavButton active={page === 'brc'} onClick={goBrc}>BRC</NavButton>
+          </nav>
+          <div className="flex items-center gap-4">
+            <span className="hidden text-xs text-muted sm:inline">Mainnet</span>
             {!wallet ? (
-              <button onClick={() => setShowWalletSelect(true)} className="inline-flex items-center gap-2 rounded-lg border border-[#f5c842]/35 bg-[#f5c842]/10 px-4 py-2 font-cinzel text-[0.68rem] font-bold uppercase tracking-widest text-[#f5c842] transition hover:bg-[#f5c842]/18">
-                <Wallet size={15} /> Connect
-              </button>
+              <button type="button" onClick={() => setShowWalletSelect(true)} className="text-sm font-medium">Connect</button>
             ) : (
-              <div className="flex items-center gap-2">
-                <button onClick={goProfile} className="hidden rounded-lg border border-[#3a2808] bg-black/35 px-3 py-2 font-mono text-[0.72rem] text-[#c9a040] transition hover:border-[#f5c842]/40 sm:block">
+              <div className="flex items-center gap-4">
+                <button type="button" onClick={goProfile} className="hidden text-xs text-muted sm:block">
                   {wallet.ordAddr.slice(0, 5)}...{wallet.ordAddr.slice(-5)}
                 </button>
-                <button onClick={disconnectWallet} className="rounded-lg border border-[#3a2808] bg-black/35 p-2 text-[#7a5a25] transition hover:text-[#cc6060]" aria-label="Disconnect wallet">
-                  <LogOut size={16} />
-                </button>
+                <button type="button" onClick={disconnectWallet} className={textBtn}>Disconnect</button>
               </div>
             )}
           </div>
         </div>
-      </nav>
+      </header>
 
       <BottomAppNav
         page={page}
@@ -581,48 +552,52 @@ export default function App() {
           onProfile={goProfile}
         />
       ) : page === 'about' ? (
-        <AboutPage
-          onHome={goHome}
-          onCast={goInscribe}
-        />
+        <AboutPage onHome={goHome} onCast={goInscribe} />
       ) : (
-      <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
-        <section className="grid gap-5 lg:grid-cols-[minmax(0,0.98fr)_minmax(360px,0.72fr)]">
-          <div className="rounded-2xl border border-[#3a2808] bg-[#100904]/88 p-4 shadow-[0_20px_70px_rgba(0,0,0,0.28)] sm:p-5">
-            <div className="mb-5 grid grid-cols-2 gap-2 rounded-xl border border-[#221508] bg-black/35 p-1">
-              <button onClick={() => setTab('inscribe')} className={`flex items-center justify-center gap-2 rounded-lg py-2.5 font-cinzel text-[0.7rem] font-bold uppercase tracking-widest transition ${tab === 'inscribe' ? 'border border-[#f5c842]/25 bg-[#f5c842]/12 text-[#f5c842]' : 'text-[#7a5a25] hover:text-[#c9a040]'}`}>
-                <Coins size={15} /> Inscribe
-              </button>
-              <button onClick={goProfile} className={`flex items-center justify-center gap-2 rounded-lg py-2.5 font-cinzel text-[0.7rem] font-bold uppercase tracking-widest transition ${tab === 'profile' ? 'border border-[#f5c842]/25 bg-[#f5c842]/12 text-[#f5c842]' : 'text-[#7a5a25] hover:text-[#c9a040]'}`}>
-                <History size={15} /> Profile
-                <span className="rounded-full border border-[#f5c842]/20 bg-[#f5c842]/10 px-1.5 text-[0.58rem] text-[#f5c842]">{walletInscriptions.length}</span>
-              </button>
+        <main id="content" className="mx-auto w-full max-w-xl px-5 pb-24 pt-16 sm:pt-24">
+          <div className="mb-12 flex items-baseline justify-between gap-6">
+            <h1 className="text-4xl font-medium tracking-tight">{homeTitle}</h1>
+            <div className="flex gap-4">
+              {homeSection !== 'inscribe' && (
+                <button type="button" className={textBtn} onClick={() => setHomeSection('inscribe')}>Inscribe</button>
+              )}
+              {homeSection !== 'museum' && (
+                <button type="button" className={textBtn} onClick={() => setHomeSection('museum')}>Museum</button>
+              )}
+              {homeSection !== 'chat' && (
+                <button type="button" className={textBtn} onClick={() => setHomeSection('chat')}>Chat</button>
+              )}
             </div>
+          </div>
 
-            {tab === 'inscribe' ? (
-              <InscribePanel
-                selFile={selFile}
-                wishText={wishText}
-                feeRates={feeRates}
-                selRate={selRate}
-                customRate={customRate}
-                wallet={wallet}
-                status={status}
-                progress={progress}
-                contentBytes={contentBytes}
-                netFee={netFee}
-                totalFee={totalFee}
-                canInscribe={canInscribe}
-                onFile={handleFile}
-                onRemoveFile={() => setSelFile(null)}
-                onWishText={setWishText}
-                onSelRate={setSelRate}
-                onCustomRate={setCustomRate}
-                maxFileSizeLabel={MAX_FILE_SIZE_LABEL}
-                onConnect={() => setShowWalletSelect(true)}
-                onDisconnect={disconnectWallet}
-                onInscribe={handleInscribe}
-              />
+          {homeSection === 'inscribe' ? (
+            tab === 'inscribe' ? (
+              <>
+                <InscribePanel
+                  selFile={selFile}
+                  wishText={wishText}
+                  feeRates={feeRates}
+                  selRate={selRate}
+                  customRate={customRate}
+                  wallet={wallet}
+                  status={status}
+                  progress={progress}
+                  contentBytes={contentBytes}
+                  netFee={netFee}
+                  totalFee={totalFee}
+                  canInscribe={canInscribe}
+                  onFile={handleFile}
+                  onRemoveFile={() => setSelFile(null)}
+                  onWishText={setWishText}
+                  onSelRate={setSelRate}
+                  onCustomRate={setCustomRate}
+                  maxFileSizeLabel={MAX_FILE_SIZE_LABEL}
+                  onConnect={() => setShowWalletSelect(true)}
+                  onDisconnect={disconnectWallet}
+                  onInscribe={handleInscribe}
+                />
+                <HowItWorks />
+              </>
             ) : (
               <HistoryPanel
                 wallet={wallet}
@@ -634,12 +609,10 @@ export default function App() {
                 onConnect={() => setShowWalletSelect(true)}
                 profiles={profiles}
               />
-            )}
-          </div>
-
-          <div className="grid gap-5">
+            )
+          ) : homeSection === 'museum' ? (
             <MuseumGallery inscriptions={publicGallery} profiles={profiles} />
-            <HowItWorks />
+          ) : (
             <MuseumChat
               wallet={wallet}
               profiles={profiles}
@@ -649,44 +622,56 @@ export default function App() {
               onSend={sendMessage}
               onConnect={() => setShowWalletSelect(true)}
             />
-          </div>
-        </section>
-      </main>
+          )}
+        </main>
       )}
 
-      <footer className="relative z-10 mx-auto max-w-7xl px-4 pb-10 pt-2 text-center sm:px-6">
-        <div className="border-t border-[#3a2808]/60 pt-6 font-cinzel text-[0.62rem] uppercase leading-loose tracking-[0.18em] text-[#5f4218]">
-          Bitcoin Wishing Well · Bitcoin Mainnet · Ordinals Protocol<br />
-          <a href="https://x.com/SamSageWize" target="_blank" rel="noopener noreferrer" className="font-bold text-[#c9a040] transition hover:text-[#f5c842]">Founder: @SamSageWize</a>
-        </div>
+      <footer className="mx-auto max-w-5xl px-5 py-12 text-sm text-muted">
+        <p>BTC Inscriber · Bitcoin mainnet</p>
+        <a href="https://x.com/SamSageWize" target="_blank" rel="noopener noreferrer" className="mt-2 inline-block underline decoration-rule underline-offset-4 hover:decoration-ink">
+          Founder: @SamSageWize
+        </a>
       </footer>
 
-      <AnimatePresence>
-        {showCongrats && (
-          <SuccessModal lastTxid={lastTxid} onClose={() => setShowCongrats(false)} />
-        )}
-
-        {showWalletSelect && (
-          <WalletModal onClose={() => setShowWalletSelect(false)} onXverse={connectXverse} onUnisat={connectUnisat} />
-        )}
-
-        {showConfirm && (
-          <ConfirmModal
-            selFile={selFile}
-            wishText={wishText}
-            selRate={selRate}
-            currentRate={currentRate}
-            netFee={netFee}
-            totalFee={totalFee}
-            onCancel={() => setShowConfirm(false)}
-            onConfirm={() => {
-              setShowConfirm(false);
-              executeInscribe();
-            }}
-          />
-        )}
-      </AnimatePresence>
+      {showCongrats && <SuccessModal lastTxid={lastTxid} onClose={() => setShowCongrats(false)} />}
+      {showWalletSelect && <WalletModal onClose={() => setShowWalletSelect(false)} onXverse={connectXverse} onUnisat={connectUnisat} />}
+      {showConfirm && (
+        <ConfirmModal
+          selFile={selFile}
+          wishText={wishText}
+          selRate={selRate}
+          currentRate={currentRate}
+          netFee={netFee}
+          totalFee={totalFee}
+          onCancel={() => setShowConfirm(false)}
+          onConfirm={() => {
+            setShowConfirm(false);
+            executeInscribe();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function Frame({ children, wide = false, tall = false }: { children: ReactNode; wide?: boolean; tall?: boolean }) {
+  return (
+    <main id="content" className={`mx-auto w-full px-5 pb-24 ${tall ? 'flex min-h-[70vh] flex-col justify-center py-20' : 'pt-16 sm:pt-24'} ${wide ? 'max-w-5xl' : 'max-w-xl'}`}>
+      {children}
+    </main>
+  );
+}
+
+function NavButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={`text-sm ${active ? 'text-ink underline decoration-brand underline-offset-8' : 'text-muted hover:text-ink'}`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -708,64 +693,27 @@ function WelcomePage({
   onProfile: () => void;
 }) {
   return (
-    <main className="relative z-10 mx-auto grid min-h-[calc(100vh-150px)] max-w-7xl place-items-center px-4 py-6 sm:px-6 lg:py-8">
-      <section className="grid w-full gap-8 lg:grid-cols-[minmax(320px,0.95fr)_minmax(0,1.05fr)] lg:items-center">
-        <div className="relative min-h-[420px] overflow-hidden rounded-[18px] border border-[#3a2808] bg-black shadow-[0_24px_90px_rgba(0,0,0,0.42)] lg:min-h-[640px]">
-          <React.Suspense fallback={<div className="h-full min-h-[420px] bg-[radial-gradient(circle_at_center,#1a1208,#020202_70%)]" />}>
-            <ThreeWell onPlunge={onCast} compact />
-          </React.Suspense>
-          <div className="well-welcome pointer-events-none absolute inset-0 z-10 flex items-end justify-center p-6">
-            <span className="falling-wish-token">wish</span>
-            <p className="rounded-full border border-[#f5c842]/25 bg-black/55 px-4 py-2 font-cinzel text-[0.62rem] uppercase tracking-[0.22em] text-[#c9a040] shadow-[0_0_34px_rgba(245,200,66,0.16)] backdrop-blur-sm">
-              fall in, inscribe forever
-            </p>
-          </div>
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/10" />
-        </div>
-
-        <div className="mx-auto max-w-2xl lg:mx-0">
-          <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-[#f5c842]/20 bg-[#f5c842]/8 px-3 py-1 font-cinzel text-[0.62rem] uppercase tracking-[0.22em] text-[#c9a040]">
-            <ShieldCheck size={13} /> Bitcoin Ordinals
-          </div>
-          <h1 className="font-cinzel-decorative text-[clamp(2.5rem,7vw,5.6rem)] leading-none tracking-widest text-[#f5c842]">
-            The Wishing Well
-          </h1>
-          <p className="mt-5 max-w-xl text-[1rem] leading-8 text-[#b89655]">
-            Inscribe a wish on Bitcoin. Keep it simple, see the fee, and find the inscription ID in your profile and the museum.
-          </p>
-
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <button onClick={onCast} className="rounded-xl bg-gradient-to-r from-[#f5c842] to-[#c9a040] px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-black shadow-[0_0_28px_rgba(245,200,66,0.22)] transition hover:brightness-110">
-              Start Inscribing
-            </button>
-            <button onClick={onProfile} className="rounded-xl border border-[#3a2808] bg-black/35 px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-[#c9a040] transition hover:border-[#f5c842]/35 hover:text-[#f5c842]">
-              Profile
-            </button>
-          </div>
-
-          <div className="mt-10 grid grid-cols-3 gap-3 border-t border-[#3a2808] pt-5">
-            <MinimalStat label="wishes" value={inscriptions.length.toLocaleString()} />
-            <MinimalStat label="profiles" value={Object.keys(profiles).length.toLocaleString()} />
-            <MinimalStat label="fee" value={`${currentRate} s/vB`} />
-          </div>
-
-          {wallet && (
-            <p className="mt-5 font-mono text-xs text-[#7a5a25]">
-              Connected: {wallet.ordAddr.slice(0, 8)}...{wallet.ordAddr.slice(-8)} · {walletInscriptions.length} indexed
-            </p>
-          )}
-        </div>
-      </section>
-    </main>
-  );
-}
-
-function MinimalStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="font-mono text-lg text-[#f5c842]">{value}</div>
-      <div className="mt-1 font-cinzel text-[0.54rem] uppercase tracking-widest text-[#6f501f]">{label}</div>
-    </div>
+    <Frame tall>
+      <p className="text-xs text-muted">Bitcoin mainnet</p>
+      <h1 className="mt-3 text-4xl font-medium tracking-tight sm:text-5xl">BTC Inscriber</h1>
+      <p className="mt-4 max-w-md text-base leading-7 text-muted">
+        Inscribe text or a small file. Fees are shown before you sign.
+      </p>
+      <div className="mt-8 flex items-center gap-6">
+        <button type="button" onClick={onCast} className={primary}>Inscribe</button>
+        <button type="button" onClick={onProfile} className={textBtn}>Profile</button>
+      </div>
+      <dl className="mt-16 grid grid-cols-3 gap-6">
+        <Stat label="Inscriptions" value={inscriptions.length.toLocaleString()} />
+        <Stat label="Profiles" value={Object.keys(profiles).length.toLocaleString()} />
+        <Stat label="Fee" value={`${currentRate} s/vB`} />
+      </dl>
+      {wallet && (
+        <p className="mt-8 text-xs text-muted">
+          {wallet.ordAddr.slice(0, 8)}...{wallet.ordAddr.slice(-8)} · {walletInscriptions.length} indexed
+        </p>
+      )}
+    </Frame>
   );
 }
 
@@ -789,27 +737,26 @@ function BottomAppNav({
   onBrc: () => void;
 }) {
   const items = [
-    { label: 'Home', icon: <Sparkles size={18} />, active: page === 'welcome', onClick: onHome },
-    { label: 'Inscribe', icon: <Coins size={18} />, active: page === 'home' && tab === 'inscribe', onClick: onInscribe },
-    { label: 'Profile', icon: <History size={18} />, active: page === 'profile', onClick: onProfile, count: walletCount },
-    { label: 'About', icon: <MessageCircle size={18} />, active: page === 'about', onClick: onAbout },
-    { label: 'BRC', icon: <Search size={18} />, active: page === 'brc', onClick: onBrc },
+    { label: 'Home', active: page === 'welcome', onClick: onHome },
+    { label: 'Inscribe', active: page === 'home' && tab === 'inscribe', onClick: onInscribe },
+    { label: 'Profile', active: page === 'profile', onClick: onProfile, count: walletCount },
+    { label: 'About', active: page === 'about', onClick: onAbout },
+    { label: 'BRC', active: page === 'brc', onClick: onBrc },
   ];
 
   return (
-    <nav className="bottom-app-nav fixed inset-x-0 bottom-0 z-[9998] border-t border-[#3a2808]/80 bg-[#070401]/94 px-2 py-2 backdrop-blur-xl" aria-label="App navigation">
-      <div className="mx-auto grid max-w-2xl grid-cols-5 gap-1">
+    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-rule bg-paper px-2 py-2 sm:hidden" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }} aria-label="Mobile">
+      <div className="mx-auto grid max-w-lg grid-cols-5">
         {items.map((item) => (
           <button
             key={item.label}
+            type="button"
             onClick={item.onClick}
-            className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 font-cinzel text-[0.55rem] font-bold uppercase tracking-wider transition ${item.active ? 'bg-[#f5c842]/12 text-[#f5c842]' : 'text-[#7a5a25] hover:bg-[#f5c842]/8 hover:text-[#c9a040]'}`}
+            aria-current={item.active ? 'page' : undefined}
+            className={`flex min-h-12 flex-col items-center justify-center text-[0.7rem] ${item.active ? 'text-ink' : 'text-muted'}`}
           >
-            {item.icon}
-            <span className="truncate">{item.label}</span>
-            {item.count ? (
-              <span className="absolute right-2 top-1 rounded-full bg-[#f5c842] px-1.5 font-mono text-[0.5rem] text-black">{item.count}</span>
-            ) : null}
+            <span>{item.label}</span>
+            {item.count ? <span className="tabular-nums text-[0.65rem] text-muted">{item.count}</span> : null}
           </button>
         ))}
       </div>
@@ -818,31 +765,11 @@ function BottomAppNav({
 }
 
 const commercialSlides = [
-  {
-    kicker: '00-03 seconds',
-    headline: 'Make a wish.',
-    body: 'Start with words, art, music, code, or a tiny file worth preserving.',
-  },
-  {
-    kicker: '03-06 seconds',
-    headline: 'Drop it into Bitcoin.',
-    body: 'WishOnBitcoin turns your idea into an ordinal inscription on the eternal ledger.',
-  },
-  {
-    kicker: '06-09 seconds',
-    headline: 'See the cost before you sign.',
-    body: 'Review content size, fee speed, network fee, and service fee before your wallet prompt.',
-  },
-  {
-    kicker: '09-12 seconds',
-    headline: 'Get the inscription ID.',
-    body: 'Every wish gets a visible ID so people can find it, verify it, and open it on-chain.',
-  },
-  {
-    kicker: '12-15 seconds',
-    headline: 'Build the museum.',
-    body: 'Your profile history and the public museum index every wish made through the well.',
-  },
+  { kicker: '00–03s', headline: 'Write something.', body: 'Text, an image, audio, code, or a small file.' },
+  { kicker: '03–06s', headline: 'Put it on Bitcoin.', body: 'BTC Inscriber turns it into an ordinal inscription.' },
+  { kicker: '06–09s', headline: 'See the cost first.', body: 'Size, speed, network fee, and service fee are shown before you sign.' },
+  { kicker: '09–12s', headline: 'Keep the ID.', body: 'Each inscription has an ID you can open and verify.' },
+  { kicker: '12–15s', headline: 'Find it later.', body: 'Your profile and the museum list what was inscribed here.' },
 ];
 
 function AboutPage({ onHome, onCast }: { onHome: () => void; onCast: () => void }) {
@@ -858,88 +785,40 @@ function AboutPage({ onHome, onCast }: { onHome: () => void; onCast: () => void 
   const slide = commercialSlides[activeSlide];
 
   return (
-    <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-stretch">
-        <div className="commercial-frame relative min-h-[620px] overflow-hidden rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-6 shadow-[0_24px_90px_rgba(0,0,0,0.42)] sm:p-8">
-          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_22%,rgba(245,200,66,0.18),transparent_26%),radial-gradient(circle_at_50%_78%,rgba(80,168,96,0.08),transparent_28%)]" />
-          <div className="relative z-10 flex min-h-[560px] flex-col justify-between">
-            <div className="flex items-center justify-between gap-3">
-              <span className="rounded-full border border-[#f5c842]/25 bg-[#f5c842]/10 px-3 py-1 font-cinzel text-[0.62rem] font-bold uppercase tracking-[0.22em] text-[#f5c842]">
-                15 second commercial
-              </span>
-              <span className="font-mono text-xs text-[#7a5a25]">{activeSlide + 1}/5</span>
-            </div>
-
-            <div className="mx-auto grid max-w-4xl gap-8 py-10 text-center">
-              <div className="mx-auto grid h-24 w-24 place-items-center rounded-full border border-[#f5c842]/30 bg-black/40 shadow-[0_0_60px_rgba(245,200,66,0.18)]">
-                <Coins className="text-[#f5c842]" size={38} />
-              </div>
-              <div key={activeSlide} className="commercial-slide">
-                <p className="font-cinzel text-[0.68rem] font-bold uppercase tracking-[0.28em] text-[#9c793c]">{slide.kicker}</p>
-                <h1 className="mt-5 font-cinzel-decorative text-[clamp(2.8rem,8vw,6.6rem)] leading-none tracking-widest text-[#f5c842]">
-                  {slide.headline}
-                </h1>
-                <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-[#c7a866]">
-                  {slide.body}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3">
-              <div className="grid grid-cols-5 gap-2" aria-label="Commercial slide progress">
-                {commercialSlides.map((item, index) => (
-                  <button
-                    key={item.headline}
-                    onClick={() => setActiveSlide(index)}
-                    className={`h-2 rounded-full transition ${index === activeSlide ? 'bg-[#f5c842]' : 'bg-[#3a2808]'}`}
-                    aria-label={`Show slide ${index + 1}`}
-                  />
-                ))}
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-[#1a1008]">
-                <div key={activeSlide} className="commercial-progress h-full bg-gradient-to-r from-[#c9a040] to-[#f5c842]" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <aside className="grid gap-5">
-          <section className="rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
-            <h2 className="font-cinzel-decorative text-2xl tracking-widest text-[#f5c842]">What is this?</h2>
-            <p className="mt-4 text-sm leading-7 text-[#9c793c]">
-              WishOnBitcoin is a Bitcoin inscription studio and social museum. It helps people preserve small creations on-chain, then indexes each inscription to a wallet profile and public museum.
-            </p>
-            <div className="mt-5 grid gap-3">
-              <InfoLine label="Preserve" value="Text, art, music, code, and files" />
-              <InfoLine label="Review" value="Fees and content before signing" />
-              <InfoLine label="Index" value="Profile history plus public museum" />
-            </div>
-          </section>
-
-          <section className="rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
-            <h2 className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">Ready?</h2>
-            <p className="mt-3 text-sm leading-7 text-[#9c793c]">Turn the commercial into an inscription. Start with one sentence or one tiny file.</p>
-            <div className="mt-5 grid gap-3">
-              <button onClick={onCast} className="rounded-xl bg-gradient-to-r from-[#f5c842] to-[#c9a040] px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-black transition hover:brightness-110">
-                Start Inscribing
-              </button>
-              <button onClick={onHome} className="rounded-xl border border-[#3a2808] bg-black/35 px-5 py-3 font-cinzel text-[0.75rem] font-bold uppercase tracking-[0.18em] text-[#c9a040] transition hover:border-[#f5c842]/35 hover:text-[#f5c842]">
-                Back Home
-              </button>
-            </div>
-          </section>
-        </aside>
+    <Frame>
+      <p className="text-xs text-muted">{slide.kicker}</p>
+      <h1 className="mt-3 text-4xl font-medium tracking-tight">{slide.headline}</h1>
+      <p className="mt-4 text-base leading-7 text-muted">{slide.body}</p>
+      <div className="mt-8 flex gap-3" aria-label="Slides">
+        {commercialSlides.map((item, index) => (
+          <button
+            key={item.headline}
+            type="button"
+            onClick={() => setActiveSlide(index)}
+            aria-current={index === activeSlide}
+            aria-label={`Show slide ${index + 1}: ${item.headline}`}
+            className={`h-11 w-8 text-sm tabular-nums ${index === activeSlide ? 'text-ink underline decoration-brand underline-offset-8' : 'text-muted'}`}
+          >
+            {index + 1}
+          </button>
+        ))}
+      </div>
+      <section className="mt-16">
+        <h2 className="text-lg font-medium">What this is</h2>
+        <p className="mt-3 text-sm leading-6 text-muted">
+          BTC Inscriber writes a small file or some text onto Bitcoin, then lists it on your profile and in the museum.
+        </p>
+        <ul className="mt-6 space-y-3 text-sm leading-6">
+          <li>Text, images, audio, code, and other small files.</li>
+          <li>Fees shown before you sign.</li>
+          <li>Profile history and a public museum.</li>
+        </ul>
       </section>
-    </main>
-  );
-}
-
-function InfoLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-[#2a1808] bg-black/25 p-4">
-      <div className="font-cinzel text-[0.58rem] uppercase tracking-widest text-[#6f501f]">{label}</div>
-      <div className="mt-1 text-sm text-[#d4a040]">{value}</div>
-    </div>
+      <div className="mt-10 flex items-center gap-6">
+        <button type="button" onClick={onCast} className={primary}>Inscribe</button>
+        <button type="button" onClick={onHome} className={textBtn}>Home</button>
+      </div>
+    </Frame>
   );
 }
 
@@ -963,129 +842,96 @@ function BrcPage({ ticker, lookup, loading, error, onTicker, onLookup, onHome }:
   const deployInscription = brcField(info, ['inscriptionId', 'deployInscriptionId', 'deployInscription']);
 
   return (
-    <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,0.92fr)_420px]">
-        <div className="rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-6 shadow-[0_24px_90px_rgba(0,0,0,0.42)] sm:p-8">
-          <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-[#f5c842]/20 bg-[#f5c842]/8 px-3 py-1 font-cinzel text-[0.62rem] uppercase tracking-[0.22em] text-[#c9a040]">
-            <Coins size={13} /> Read-only BRC-20
-          </div>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h1 className="font-cinzel-decorative text-[clamp(2.2rem,5vw,4rem)] leading-tight tracking-widest text-[#f5c842]">BRC Viewer</h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-[#b89655]">
-                Explore original 4-character BRC-20 tickers using indexed Bitcoin protocol data. This page does not mint, transfer, list, or request wallet signatures.
-              </p>
-            </div>
-            <button onClick={onHome} className="w-fit rounded-xl border border-[#3a2808] bg-black/35 px-5 py-3 font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-[#c9a040] transition hover:border-[#f5c842]/35 hover:text-[#f5c842]">
-              Back Home
-            </button>
-          </div>
-
-          <div className="mt-8 grid gap-3 rounded-2xl border border-[#2a1808] bg-black/35 p-3 sm:grid-cols-[1fr_auto]">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7a5a25]" size={16} />
-              <input
-                value={ticker}
-                onChange={(e) => onTicker(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toLowerCase())}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') onLookup();
-                }}
-                placeholder="ordi"
-                maxLength={4}
-                className="h-12 w-full rounded-xl border border-[#2a1808] bg-[#090502] pl-10 pr-4 font-mono text-lg uppercase tracking-[0.32em] text-[#f5c842] outline-none focus:border-[#c9a040]"
-              />
-            </div>
-            <button
-              onClick={() => onLookup()}
-              disabled={!validTicker || loading}
-              className="h-12 rounded-xl bg-gradient-to-r from-[#f5c842] to-[#c9a040] px-5 font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              {loading ? 'Loading' : 'Lookup'}
-            </button>
-          </div>
-
-          {(error || lookup?.setupNeeded) && (
-            <div className="mt-4 rounded-2xl border border-[#7a4a18] bg-[#2a1605]/70 p-4 text-sm leading-6 text-[#d8a858]">
-              {error || 'Add UNISAT_API_KEY in Vercel to enable live BRC-20 indexer data.'}
-            </div>
-          )}
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Stat label="Ticker" value={(lookup?.ticker || cleanTicker || '----').toUpperCase()} />
-            <Stat label="Minted" value={formatBrcValue(minted)} />
-            <Stat label="Max" value={formatBrcValue(max)} />
-            <Stat label="Holders" value={formatBrcValue(holders)} />
-          </div>
-
-          <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_0.85fr]">
-            <section className="rounded-2xl border border-[#2a1808] bg-black/25 p-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">Token Snapshot</h2>
-                {lookup?.source && <span className="rounded-full border border-[#50a860]/25 bg-[#50a860]/10 px-2 py-1 font-cinzel text-[0.55rem] uppercase tracking-widest text-[#70d080]">{lookup.source}</span>}
-              </div>
-              <div className="grid gap-3 text-sm">
-                <BrcRow label="Deploy inscription" value={formatBrcValue(deployInscription)} href={deployInscription ? `https://ordinals.com/inscription/${deployInscription}` : undefined} />
-                <BrcRow label="Deployer" value={formatBrcValue(deployer)} />
-                <BrcRow label="Transactions" value={formatBrcValue(transactions)} />
-                <BrcRow label="Limit per mint" value={formatBrcValue(brcField(info, ['lim', 'limit', 'mintLimit']))} />
-                <BrcRow label="Decimals" value={formatBrcValue(brcField(info, ['decimal', 'decimals']))} />
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-[#2a1808] bg-black/25 p-5">
-              <h2 className="mb-4 font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">Top Holders</h2>
-              {lookup?.holders?.length ? (
-                <div className="space-y-2">
-                  {lookup.holders.slice(0, 8).map((holder, index) => (
-                    <div key={`${holder.address || index}`} className="flex items-center justify-between gap-3 rounded-xl border border-[#1f1408] bg-[#090502] px-3 py-2 text-sm">
-                      <span className="min-w-0 truncate font-mono text-[#9c793c]">{holder.address || holder.owner || 'Unknown holder'}</span>
-                      <span className="shrink-0 font-mono text-[#f5c842]">{formatBrcValue(holder.overallBalance || holder.balance || holder.amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="rounded-xl border border-[#1f1408] bg-[#090502] p-4 text-sm leading-6 text-[#7a5a25]">Lookup a ticker to load holder data when the indexer is configured.</p>
-              )}
-            </section>
-          </div>
-        </div>
-
-        <aside className="grid gap-4">
-          <ProtocolCard title="BRC-20" body="Ticker info, balances, holders, and transfer history come from a protocol indexer. Original tickers use exactly 4 letters or numbers." active />
-          <ProtocolCard title="Ordinals" body="Images and inscription content should resolve through ordinals.com/content/{inscriptionId} or ordinals.com/inscription/{inscriptionId}." />
-          <ProtocolCard title="Runes" body="Runes can be displayed the same way through read-only indexer endpoints before we add any wallet actions." />
-          <div className="rounded-2xl border border-[#2a1808] bg-[#100904]/88 p-5">
-            <h2 className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">Safety</h2>
-            <p className="mt-3 text-sm leading-6 text-[#8f6a2c]">This screen is view-only. No wallet transaction, PSBT, signature, mint, transfer, or listing can be created here.</p>
-          </div>
-        </aside>
-      </section>
-    </main>
-  );
-}
-
-function ProtocolCard({ title, body, active }: { title: string; body: string; active?: boolean }) {
-  return (
-    <div className={`rounded-2xl border p-5 ${active ? 'border-[#f5c842]/25 bg-[#f5c842]/8' : 'border-[#2a1808] bg-[#100904]/88'}`}>
-      <div className="mb-3 flex items-center gap-2 font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-[#f5c842]">
-        <ShieldCheck size={14} /> {title}
+    <Frame wide>
+      <div className="flex items-baseline justify-between gap-6">
+        <h1 className="text-4xl font-medium tracking-tight">BRC-20</h1>
+        <button type="button" onClick={onHome} className={textBtn}>Home</button>
       </div>
-      <p className="text-sm leading-6 text-[#8f6a2c]">{body}</p>
-    </div>
+      <p className="mt-4 max-w-xl text-sm leading-6 text-muted">
+        Look up a 4-character ticker. This page only reads data. It does not mint, transfer, or ask for a signature.
+      </p>
+
+      <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-end">
+        <label className="block flex-1">
+          <span className={label}>Ticker</span>
+          <input
+            value={ticker}
+            onChange={(e) => onTicker(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toLowerCase())}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onLookup();
+            }}
+            placeholder="ordi"
+            maxLength={4}
+            className={`${field} uppercase tracking-[0.2em]`}
+          />
+        </label>
+        <button type="button" onClick={() => onLookup()} disabled={!validTicker || loading} className={primary}>
+          {loading ? 'Loading' : 'Look up'}
+        </button>
+      </div>
+
+      {(error || lookup?.setupNeeded) && (
+        <p role="status" className="mt-6 text-sm leading-6 text-bad">
+          {error || 'Add UNISAT_API_KEY in Vercel to enable live BRC-20 indexer data.'}
+        </p>
+      )}
+
+      <dl className="mt-10 grid grid-cols-2 gap-6 sm:grid-cols-4">
+        <Stat label="Ticker" value={(lookup?.ticker || cleanTicker || '----').toUpperCase()} />
+        <Stat label="Minted" value={formatBrcValue(minted)} />
+        <Stat label="Max" value={formatBrcValue(max)} />
+        <Stat label="Holders" value={formatBrcValue(holders)} />
+      </dl>
+
+      <section className="mt-12">
+        <div className="flex items-baseline justify-between gap-4">
+          <h2 className="text-lg font-medium">Snapshot</h2>
+          {lookup?.source && <p className="text-xs text-muted">{lookup.source}</p>}
+        </div>
+        <div className="mt-4">
+          <BrcRow label="Deploy inscription" value={formatBrcValue(deployInscription)} href={deployInscription ? `https://ordinals.com/inscription/${deployInscription}` : undefined} />
+          <BrcRow label="Deployer" value={formatBrcValue(deployer)} />
+          <BrcRow label="Transactions" value={formatBrcValue(transactions)} />
+          <BrcRow label="Limit per mint" value={formatBrcValue(brcField(info, ['lim', 'limit', 'mintLimit']))} />
+          <BrcRow label="Decimals" value={formatBrcValue(brcField(info, ['decimal', 'decimals']))} />
+        </div>
+      </section>
+
+      <section className="mt-12">
+        <h2 className="text-lg font-medium">Top holders</h2>
+        {lookup?.holders?.length ? (
+          <ul className="mt-4">
+            {lookup.holders.slice(0, 8).map((holder, index) => (
+              <li key={`${holder.address || index}`} className="flex items-baseline justify-between gap-4 py-2 text-sm">
+                <span className="min-w-0 truncate text-muted">{holder.address || holder.owner || 'Unknown holder'}</span>
+                <span className="shrink-0 tabular-nums">{formatBrcValue(holder.overallBalance || holder.balance || holder.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-4 text-sm text-muted">Look up a ticker to load holders when the indexer is configured.</p>
+        )}
+      </section>
+
+      <section className="mt-12 space-y-4 text-sm leading-6 text-muted">
+        <p><span className="text-ink">BRC-20.</span> Original tickers are 4 letters or numbers. Balances and holders come from an indexer.</p>
+        <p><span className="text-ink">Ordinals.</span> Content opens at ordinals.com by inscription ID.</p>
+        <p><span className="text-ink">Runes.</span> Can be shown the same way, read-only, before any wallet action.</p>
+        <p>Nothing on this screen can create a transaction, signature, mint, transfer, or listing.</p>
+      </section>
+    </Frame>
   );
 }
 
 function BrcRow({ label, value, href }: { label: string; value: string; href?: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-[#1f1408] bg-[#090502] px-3 py-2">
-      <span className="shrink-0 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#6f501f]">{label}</span>
-      {href ? (
-        <a href={href} target="_blank" rel="noopener noreferrer" className="min-w-0 truncate font-mono text-[#c9a040] transition hover:text-[#f5c842]">
-          {value} <ExternalLink className="inline" size={10} />
-        </a>
-      ) : (
-        <span className="min-w-0 truncate text-right font-mono text-[#c9a040]">{value}</span>
-      )}
+    <div className="flex items-baseline justify-between gap-4 py-2 text-sm">
+      <span className="text-muted">{label}</span>
+      <span className="min-w-0 truncate text-right">
+        {href ? (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="underline decoration-rule underline-offset-4 hover:decoration-ink">{value}</a>
+        ) : value}
+      </span>
     </div>
   );
 }
@@ -1107,9 +953,9 @@ function formatBrcValue(value: any) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-[#3a2808] bg-black/28 p-3">
-      <div className="font-cinzel text-[0.58rem] uppercase tracking-[0.18em] text-[#6f501f]">{label}</div>
-      <div className="mt-1 font-mono text-lg text-[#f5c842]">{value}</div>
+    <div>
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="mt-1 text-lg tabular-nums">{value}</dd>
     </div>
   );
 }
@@ -1143,208 +989,95 @@ function ProfilePage({ wallet, profile, draft, inscriptions, search, status, pro
 
   if (!wallet) {
     return (
-      <main className="relative z-10 mx-auto max-w-5xl px-4 py-10 sm:px-6">
-        <div className="rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-8 text-center shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
-          <User className="mx-auto mb-4 text-[#6f501f]" size={48} />
-          <h1 className="font-cinzel-decorative text-3xl tracking-widest text-[#f5c842]">Wallet Profile</h1>
-          <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[#9c793c]">
-            Connect your ordinal wallet to edit your picture and bio, link your Twitter, and see every Wishing Well inscription ID indexed to this profile.
-          </p>
-          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-            <button onClick={onConnect} className="rounded-xl bg-[#f5c842] px-5 py-3 font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-black">Connect Wallet</button>
-            <button onClick={onHome} className="rounded-xl border border-[#3a2808] px-5 py-3 font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-[#c9a040]">Back Home</button>
-          </div>
+      <Frame tall>
+        <h1 className="text-4xl font-medium tracking-tight">Profile</h1>
+        <p className="mt-4 text-sm leading-6 text-muted">Connect a wallet to edit your name, picture, and X link, and to see inscriptions from this address.</p>
+        <div className="mt-8 flex items-center gap-6">
+          <button type="button" onClick={onConnect} className={primary}>Connect wallet</button>
+          <button type="button" onClick={onHome} className={textBtn}>Home</button>
         </div>
-      </main>
+      </Frame>
     );
   }
 
   const displayName = profile?.displayName || `${wallet.ordAddr.slice(0, 6)}...${wallet.ordAddr.slice(-4)}`;
   const avatar = draft.avatarUrl || profile?.avatarUrl;
+  const confirmed = inscriptions.filter((ins) => ins.status === 'confirmed').length;
+  const pending = inscriptions.filter((ins) => ins.status === 'pending' || !ins.status).length;
 
   return (
-    <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
-      <section className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)]">
-        <aside className="rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
-          <div className="mb-5 text-center">
-            <div className="mx-auto mb-4 grid h-32 w-32 place-items-center overflow-hidden rounded-3xl border border-[#3a2808] bg-black/35">
-              {avatar ? (
-                <img src={avatar} alt="Profile avatar" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                <User className="text-[#6f501f]" size={46} />
-              )}
-            </div>
-            <h1 className="font-cinzel-decorative text-2xl tracking-widest text-[#f5c842]">{displayName}</h1>
-            <p className="mt-2 break-all font-mono text-[0.72rem] text-[#7a5a25]">{wallet.ordAddr}</p>
-            {profile?.twitterUrl && (
-              <a href={profile.twitterUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-sm text-[#f5c842] hover:underline">
-                <AtSign size={14} /> Twitter linked
-              </a>
+    <Frame wide>
+      <div className="grid gap-16 lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <aside>
+          <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-full bg-rule text-sm">
+            {avatar ? (
+              <img src={avatar} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              displayName.slice(0, 1)
             )}
           </div>
+          <h1 className="mt-4 text-2xl font-medium tracking-tight">{displayName}</h1>
+          <p className="mt-2 break-all text-xs text-muted">{wallet.ordAddr}</p>
+          {profile?.twitterUrl && (
+            <a href={profile.twitterUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm underline decoration-rule underline-offset-4">
+              Profile on X
+            </a>
+          )}
+          <dl className="mt-6 grid grid-cols-3 gap-3">
+            <Stat label="Total" value={inscriptions.length.toString()} />
+            <Stat label="Confirmed" value={confirmed.toString()} />
+            <Stat label="Pending" value={pending.toString()} />
+          </dl>
 
-          <div className="grid grid-cols-3 gap-2">
-            <MiniStat label="Total" value={inscriptions.length.toString()} />
-            <MiniStat label="Confirmed" value={inscriptions.filter((ins) => ins.status === 'confirmed').length.toString()} />
-            <MiniStat label="Pending" value={inscriptions.filter((ins) => ins.status === 'pending' || !ins.status).length.toString()} />
-          </div>
-
-          <div className="mt-5 space-y-3 rounded-2xl border border-[#2a1808] bg-black/25 p-4">
-            <h2 className="font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-[#f5c842]">Edit Profile</h2>
-            <input value={draft.displayName} onChange={(e) => onDraft({ ...draft, displayName: e.target.value })} placeholder="Display name" maxLength={40} className="w-full rounded-xl border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]" />
-            <input value={draft.avatarUrl} onChange={(e) => onDraft({ ...draft, avatarUrl: e.target.value })} placeholder="Profile picture https:// URL" className="w-full rounded-xl border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]" />
-            <input value={draft.twitterUrl} onChange={(e) => onDraft({ ...draft, twitterUrl: e.target.value })} placeholder="https://x.com/username" className="w-full rounded-xl border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]" />
-            <textarea value={draft.bio} onChange={(e) => onDraft({ ...draft, bio: e.target.value })} placeholder="Bio for your ordinal wallet museum" maxLength={240} className="h-28 w-full resize-none rounded-xl border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]" />
-            <button onClick={onSave} className="w-full rounded-xl bg-[#f5c842] px-4 py-3 font-cinzel text-[0.7rem] font-bold uppercase tracking-widest text-black">Save Profile</button>
-            {status && (
-              <p className={`rounded-xl border p-3 text-sm leading-6 ${status.type === 'ok' ? 'border-[#285028] bg-[#286428]/10 text-[#70c070]' : status.type === 'err' ? 'border-[#502020] bg-[#641e1e]/10 text-[#dd7070]' : 'border-[#3a2808] bg-[#3c1e05]/10 text-[#a08040]'}`}>{status.msg}</p>
-            )}
+          <div className="mt-10 space-y-5">
+            <h2 className="text-lg font-medium">Edit</h2>
+            <label className="block">
+              <span className={label}>Name</span>
+              <input value={draft.displayName} onChange={(e) => onDraft({ ...draft, displayName: e.target.value })} placeholder="Name" maxLength={40} className={field} />
+            </label>
+            <label className="block">
+              <span className={label}>Picture URL</span>
+              <input value={draft.avatarUrl} onChange={(e) => onDraft({ ...draft, avatarUrl: e.target.value })} placeholder="https://" className={field} />
+            </label>
+            <label className="block">
+              <span className={label}>X profile</span>
+              <input value={draft.twitterUrl} onChange={(e) => onDraft({ ...draft, twitterUrl: e.target.value })} placeholder="https://x.com/username" className={field} />
+            </label>
+            <label className="block">
+              <span className={label}>Bio</span>
+              <textarea value={draft.bio} onChange={(e) => onDraft({ ...draft, bio: e.target.value })} placeholder="Short bio" maxLength={240} className={`${field} min-h-28 resize-y`} />
+            </label>
+            <button type="button" onClick={onSave} className={primary}>Save profile</button>
+            <StatusNote status={status} />
           </div>
         </aside>
 
-        <section className="rounded-[28px] border border-[#3a2808] bg-[#100904]/88 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
-          <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-            <div>
-              <h2 className="font-cinzel-decorative text-2xl tracking-widest text-[#f5c842]">Wishing Well History</h2>
-              <p className="mt-2 text-sm leading-6 text-[#9c793c]">Everything inscribed through this site with the connected wallet, including the visible ordinal inscription ID.</p>
-            </div>
-            <div className="relative min-w-[240px]">
-              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5a4018]" size={15} />
-              <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Search inscriptions" className="w-full rounded-xl border border-[#2a1808] bg-black/35 py-2 pl-9 pr-3 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]" />
-            </div>
+        <section>
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <h2 className="text-2xl font-medium tracking-tight">History</h2>
+            <label className="block sm:w-56">
+              <span className="sr-only">Search inscriptions</span>
+              <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Search" className={field} />
+            </label>
           </div>
-
+          <p className="mt-3 text-sm text-muted">Inscriptions from this wallet, with their IDs.</p>
           {!filtered.length ? (
-            <div className="rounded-2xl border border-dashed border-[#2a1a08] bg-black/20 p-10 text-center">
-              <Coins className="mx-auto mb-3 text-[#4a3018]" size={42} />
-              <p className="mb-5 text-sm text-[#7a5a25]">No Wishing Well inscriptions found for this wallet yet.</p>
-              <button onClick={onCast} className="font-cinzel text-[0.7rem] uppercase tracking-widest text-[#c9a040] hover:text-[#f5c842]">Inscribe something</button>
+            <div className="mt-10">
+              <p className="text-sm text-muted">{search ? 'No matches.' : 'No inscriptions yet.'}</p>
+              <button type="button" onClick={onCast} className={`${textBtn} mt-4 underline underline-offset-4`}>Inscribe</button>
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <ul className="mt-6 divide-y divide-rule">
               {filtered.map((ins) => (
-                <React.Fragment key={ins.wishTxid}>
+                <li key={ins.wishTxid} className="py-6">
                   <InscriptionCard ins={ins} profile={profiles[ins.address]} />
-                </React.Fragment>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </section>
-      </section>
-    </main>
-  );
-}
-
-function Pill({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-[#3a2808] bg-black/30 px-3 py-1 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#c9a040]">
-      {icon} {label}
-    </span>
-  );
-}
-
-function ProfileSummary({ wallet, profile, draft, total, confirmed, pending, balance, onConnect, onRefresh, onDraft, onSave }: {
-  wallet: { type: WalletType; ordAddr: string; payAddr: string; balance: number } | null;
-  profile?: Profile;
-  draft: { displayName: string; avatarUrl: string; twitterUrl: string; bio: string };
-  total: number;
-  confirmed: number;
-  pending: number;
-  balance: number;
-  onConnect: () => void;
-  onRefresh: () => void;
-  onDraft: (next: { displayName: string; avatarUrl: string; twitterUrl: string; bio: string }) => void;
-  onSave: () => void;
-}) {
-  return (
-    <div className="rounded-2xl border border-[#3a2808] bg-[#100904]/88 p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">Profile</h2>
-        {wallet && <button onClick={onRefresh} className="rounded-lg border border-[#3a2808] p-2 text-[#7a5a25] transition hover:text-[#f5c842]" aria-label="Refresh balance"><RefreshCw size={14} /></button>}
       </div>
-
-      {wallet ? (
-        <>
-          <div className="rounded-xl border border-[#2a1808] bg-black/30 p-3">
-            <div className="font-cinzel text-[0.58rem] uppercase tracking-widest text-[#6f501f]">Ordinal wallet museum card</div>
-            <div className="mt-1 break-all font-mono text-[0.74rem] text-[#c9a040]">{wallet.ordAddr}</div>
-            {profile?.twitterUrl && (
-              <a href={profile.twitterUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-[0.72rem] text-[#f5c842] hover:underline">
-                <AtSign size={13} /> Linked Twitter
-              </a>
-            )}
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <MiniStat label="Balance" value={`${balance.toLocaleString()} sats`} />
-            <MiniStat label="History" value={total.toString()} />
-            <MiniStat label="Confirmed" value={confirmed.toString()} />
-            <MiniStat label="Pending" value={pending.toString()} />
-          </div>
-          <div className="mt-3 space-y-2 rounded-xl border border-[#2a1808] bg-black/25 p-3">
-            <input
-              value={draft.displayName}
-              onChange={(e) => onDraft({ ...draft, displayName: e.target.value })}
-              placeholder="Display name"
-              className="w-full rounded-lg border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]"
-            />
-            <input
-              value={draft.avatarUrl}
-              onChange={(e) => onDraft({ ...draft, avatarUrl: e.target.value })}
-              placeholder="Profile picture URL"
-              className="w-full rounded-lg border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]"
-            />
-            <input
-              value={draft.twitterUrl}
-              onChange={(e) => onDraft({ ...draft, twitterUrl: e.target.value })}
-              placeholder="https://x.com/username"
-              className="w-full rounded-lg border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]"
-            />
-            <textarea
-              value={draft.bio}
-              onChange={(e) => onDraft({ ...draft, bio: e.target.value })}
-              placeholder="Short museum bio"
-              className="h-20 w-full resize-none rounded-lg border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]"
-            />
-            <button onClick={onSave} className="w-full rounded-lg bg-[#f5c842] px-3 py-2 font-cinzel text-[0.65rem] font-bold uppercase tracking-widest text-black">
-              Save Twitter Link
-            </button>
-          </div>
-        </>
-      ) : (
-        <div className="rounded-xl border border-dashed border-[#3a2808] bg-black/25 p-5 text-center">
-          <User className="mx-auto mb-3 text-[#6f501f]" size={28} />
-          <p className="text-sm leading-6 text-[#9c793c]">Connect a Bitcoin wallet to save and view your inscription history.</p>
-          <button onClick={onConnect} className="mt-4 rounded-xl bg-[#f5c842] px-4 py-2 font-cinzel text-[0.68rem] font-bold uppercase tracking-widest text-black">
-            Connect Wallet
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-[#2a1808] bg-black/25 p-3">
-      <div className="font-cinzel text-[0.53rem] uppercase tracking-widest text-[#6f501f]">{label}</div>
-      <div className="mt-1 font-mono text-[0.83rem] text-[#e8d5a3]">{value}</div>
-    </div>
-  );
-}
-
-function SafetyPanel() {
-  return (
-    <div className="rounded-2xl border border-[#3a2808] bg-[#100904]/88 p-5">
-      <h2 className="mb-3 flex items-center gap-2 font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">
-        <ShieldCheck size={16} /> Safe Inscribing
-      </h2>
-      <ul className="space-y-3 text-sm leading-6 text-[#9c793c]">
-        <li>Connecting only shares public wallet addresses and reads balance. It does not spend, sign, or inscribe.</li>
-        <li>Review the wallet prompt before signing. Bitcoin inscriptions are permanent.</li>
-        <li>Use this for code, images, songs, and art that you want preserved on Bitcoin.</li>
-        <li>Never enter a seed phrase or private key. This site will never ask for one.</li>
-      </ul>
-    </div>
+    </Frame>
   );
 }
 
@@ -1371,121 +1104,121 @@ function InscribePanel(props: {
   onDisconnect: () => void;
   onInscribe: () => void;
 }) {
+  const fees: { tier: FeeTier; name: string }[] = [
+    { tier: 'slow', name: 'Slow' },
+    { tier: 'med', name: 'Medium' },
+    { tier: 'fast', name: 'Fast' },
+    { tier: 'custom', name: 'Custom' },
+  ];
+
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_290px]">
-      <div>
-        <div className="mb-5">
-          <h2 className="font-cinzel-decorative text-2xl tracking-widest text-[#f5c842]">Inscribe</h2>
-          <p className="mt-2 text-sm leading-6 text-[#9c793c]">Inscribe code, images, songs, writing, and art directly to Bitcoin.</p>
-        </div>
+    <div>
+      <p className="max-w-md text-sm leading-6 text-muted">Text or a file on Bitcoin. You see the fee before you sign.</p>
 
-        {!props.selFile ? (
-          <label className="relative mb-4 block cursor-pointer rounded-2xl border border-dashed border-[#4a3015] bg-[#f5c842]/[0.025] p-6 text-center transition hover:border-[#f5c842]/70 hover:bg-[#f5c842]/[0.055]">
-            <input type="file" onChange={(e) => e.target.files?.[0] && props.onFile(e.target.files[0])} className="absolute inset-0 cursor-pointer opacity-0" />
-            <Upload className="mx-auto mb-3 text-[#c9a040]" size={30} />
-            <div className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#d8b55b]">Upload content</div>
-            <p className="mt-2 text-sm leading-6 text-[#7a5a25]">PNG, JPG, GIF, WEBP, MP3, WAV, HTML, CSS, JS, JSON, TXT, MD. Max {props.maxFileSizeLabel}.</p>
+      {!props.selFile ? (
+        <div className="mt-10">
+          <label className="inline-block cursor-pointer text-sm underline decoration-rule underline-offset-4 hover:decoration-ink focus-within:outline focus-within:outline-2 focus-within:outline-offset-4 focus-within:outline-brand">
+            <input type="file" onChange={(e) => e.target.files?.[0] && props.onFile(e.target.files[0])} className="sr-only" />
+            Upload a file
           </label>
-        ) : (
-          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-[#3a2808] bg-black/25 p-4">
-            <div className="grid h-12 w-12 place-items-center rounded-xl border border-[#3a2808] bg-[#1a1208] text-[#c9a040]">
-              {props.selFile.type.startsWith('image/') ? <ImageIcon size={22} /> : <FileText size={22} />}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-[#d4a040]">{props.selFile.name}</p>
-              <p className="text-xs text-[#6a4a1a]">{(props.selFile.size / 1024).toFixed(1)} KB</p>
-            </div>
-            <button onClick={props.onRemoveFile} className="rounded-lg p-2 text-[#6a4a1a] transition hover:text-[#e06030]" aria-label="Remove selected file">
-              <X size={18} />
+          <p className="mt-2 text-sm leading-6 text-muted">PNG, JPG, GIF, WEBP, MP3, WAV, HTML, CSS, JS, JSON, TXT, MD. Max {props.maxFileSizeLabel}.</p>
+        </div>
+      ) : (
+        <div className="mt-10 flex items-baseline justify-between gap-4">
+          <div className="min-w-0">
+            <p className="truncate text-sm">{props.selFile.name}</p>
+            <p className="mt-1 text-xs text-muted">{(props.selFile.size / 1024).toFixed(1)} KB</p>
+          </div>
+          <button type="button" onClick={props.onRemoveFile} className={textBtn}>Remove</button>
+        </div>
+      )}
+
+      <label className="mt-10 block">
+        <span className={label}>Inscription text</span>
+        <textarea value={props.wishText} onChange={(e) => props.onWishText(e.target.value)} className={`${field} min-h-32 resize-y`} placeholder="Text to inscribe" />
+      </label>
+
+      <div className="mt-10">
+        <span id="fee-label" className={label}>Fee</span>
+        <div role="group" aria-labelledby="fee-label" className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+          {fees.map(({ tier, name }) => (
+            <button
+              key={tier}
+              type="button"
+              aria-pressed={props.selRate === tier}
+              onClick={() => props.onSelRate(tier)}
+              className="py-1 text-left"
+            >
+              <span className={`block text-sm ${props.selRate === tier ? 'font-medium text-brand underline decoration-brand underline-offset-4' : 'text-muted'}`}>{name}</span>
+              <span className="mt-1 block text-sm tabular-nums">{tier === 'custom' ? props.customRate : props.feeRates[tier]} s/vB</span>
             </button>
-          </div>
-        )}
-
-        <label className="mb-4 block">
-          <span className="mb-2 block font-cinzel text-[0.7rem] uppercase tracking-widest text-[#7a5a25]">Inscription text</span>
-          <textarea value={props.wishText} onChange={(e) => props.onWishText(e.target.value)} className="h-32 w-full resize-none rounded-2xl border border-[#2a1808] bg-black/35 p-4 text-[#e8d5a3] outline-none transition placeholder:text-[#4a3018] focus:border-[#c9a040]" placeholder="Write what you want sealed on Bitcoin..." />
-        </label>
-
-        <div className="mb-4">
-          <span className="mb-2 block font-cinzel text-[0.7rem] uppercase tracking-widest text-[#7a5a25]">Fee speed</span>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {(['slow', 'med', 'fast', 'custom'] as FeeTier[]).map((tier) => (
-              <button key={tier} onClick={() => props.onSelRate(tier)} className={`rounded-xl border p-3 text-left transition ${props.selRate === tier ? 'border-[#c9a040] bg-[#f5c842]/10' : 'border-[#2a1808] bg-black/25 hover:border-[#5a3a18]'}`}>
-                <span className={`block font-cinzel text-[0.63rem] font-bold uppercase tracking-widest ${props.selRate === tier ? 'text-[#f5c842]' : 'text-[#7a5a25]'}`}>{tier}</span>
-                <span className="mt-1 block font-mono text-sm text-[#c9a040]">{tier === 'custom' ? props.customRate : props.feeRates[tier]} s/vB</span>
-              </button>
-            ))}
-          </div>
-          {props.selRate === 'custom' && (
-            <div className="mt-3 flex items-center gap-3 rounded-xl border border-[#2a1808] bg-black/35 p-3">
-              <span className="font-cinzel text-[0.65rem] uppercase tracking-widest text-[#7a5a25]">Sats/vB</span>
-              <input type="number" value={props.customRate} onChange={(e) => props.onCustomRate(Math.max(1, parseInt(e.target.value) || 1))} className="min-w-0 flex-1 bg-transparent font-mono text-[#f5c842] outline-none" />
-            </div>
-          )}
+          ))}
         </div>
-
-        <div className="mb-4 rounded-2xl border border-[#342208] bg-[#f5c842]/[0.035] p-4">
-          <span className="block font-cinzel text-[0.78rem] text-[#c9a040]">Service fee <span className="ml-1 rounded border border-[#f5c842]/25 bg-[#f5c842]/10 px-1.5 text-[0.6rem] text-[#f5c842]">+{SERVICE_FEE.toLocaleString()} sats</span></span>
-          <span className="mt-1 block text-sm leading-6 text-[#7a5a25]">Supports hosting the public inscription museum, profile history, and social features.</span>
-        </div>
-
-        {props.status && (
-          <div className={`mb-4 rounded-xl border p-3 text-sm leading-6 ${props.status.type === 'ok' ? 'border-[#285028] bg-[#286428]/10 text-[#70c070]' : props.status.type === 'err' ? 'border-[#502020] bg-[#641e1e]/10 text-[#dd7070]' : 'border-[#3a2808] bg-[#3c1e05]/10 text-[#a08040]'}`}>
-            {props.status.msg}
-          </div>
+        {props.selRate === 'custom' && (
+          <label className="mt-6 block max-w-xs">
+            <span className={label}>Sats per vB</span>
+            <input type="number" value={props.customRate} onChange={(e) => props.onCustomRate(Math.max(1, parseInt(e.target.value) || 1))} className={field} />
+          </label>
         )}
       </div>
 
-      <aside className="rounded-2xl border border-[#2a1808] bg-black/25 p-4">
-        <h3 className="mb-4 font-cinzel text-[0.72rem] font-bold uppercase tracking-widest text-[#f5c842]">Review</h3>
-        <div className="space-y-3 text-sm">
-          <ReviewLine label="Content size" value={`${props.contentBytes.toLocaleString()} B`} />
-          <ReviewLine label="Network fee" value={`${props.netFee.toLocaleString()} sats`} />
-          <ReviewLine label="Service fee" value={`${SERVICE_FEE.toLocaleString()} sats`} />
-          <div className="border-t border-[#2a1808] pt-3">
-            <ReviewLine label="Estimated total" value={`${props.totalFee.toLocaleString()} sats`} strong />
+      <p className="mt-10 text-sm leading-6 text-muted">
+        Service fee {SERVICE_FEE.toLocaleString()} sats. Supports the museum and profiles.
+      </p>
+
+      <dl className="mt-8 grid grid-cols-[1fr_auto] gap-x-8">
+        <ReviewLine label="Content size" value={`${props.contentBytes.toLocaleString()} B`} />
+        <ReviewLine label="Network fee" value={`${props.netFee.toLocaleString()} sats`} />
+        <ReviewLine label="Service fee" value={`${SERVICE_FEE.toLocaleString()} sats`} />
+        <ReviewLine label="Estimated total" value={`${props.totalFee.toLocaleString()} sats`} strong />
+      </dl>
+
+      <StatusNote status={props.status} />
+
+      <div className="mt-10">
+        {props.wallet ? (
+          <div>
+            <p className="text-xs text-muted">Wallet</p>
+            <p className="mt-1 break-all text-sm">{props.wallet.ordAddr.slice(0, 8)}...{props.wallet.ordAddr.slice(-8)}</p>
+            <p className={`mt-2 text-sm tabular-nums ${props.wallet.balance >= props.totalFee ? 'text-good' : 'text-bad'}`}>
+              {props.wallet.balance.toLocaleString()} sats
+            </p>
+            <button type="button" onClick={props.onDisconnect} className={`${textBtn} mt-3 underline underline-offset-4`}>Disconnect</button>
           </div>
-        </div>
+        ) : (
+          <button type="button" onClick={props.onConnect} className={`${textBtn} underline underline-offset-4`}>Connect wallet</button>
+        )}
 
-        <div className="mt-5 rounded-xl border border-[#2a1808] bg-black/25 p-3">
-          {props.wallet ? (
-            <div>
-              <div className="font-cinzel text-[0.58rem] uppercase tracking-widest text-[#6f501f]">Wallet</div>
-              <div className="mt-1 font-mono text-xs text-[#c9a040]">{props.wallet.ordAddr.slice(0, 8)}...{props.wallet.ordAddr.slice(-8)}</div>
-              <div className={`mt-2 font-mono text-sm ${props.wallet.balance >= props.totalFee ? 'text-[#70c070]' : 'text-[#dd7070]'}`}>{props.wallet.balance.toLocaleString()} sats</div>
-              <button onClick={props.onDisconnect} className="mt-2 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#6a3a18] underline">Disconnect</button>
-            </div>
-          ) : (
-            <button onClick={props.onConnect} className="w-full rounded-xl border border-[#f5c842]/30 bg-[#f5c842]/10 px-4 py-3 font-cinzel text-[0.68rem] font-bold uppercase tracking-widest text-[#f5c842]">
-              Connect Wallet
-            </button>
-          )}
-        </div>
-
-        <button onClick={props.onInscribe} disabled={!props.canInscribe} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-[#f5c842] to-[#b88418] px-5 py-4 font-cinzel text-[0.8rem] font-bold uppercase tracking-[0.16em] text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35">
-          <Coins size={18} /> Inscribe Now
+        <button type="button" onClick={props.onInscribe} disabled={!props.canInscribe} className={`${primary} mt-8 w-full sm:w-auto`}>
+          Inscribe
         </button>
 
         {props.progress && (
-          <div className="mt-4">
-            <div className="h-1.5 overflow-hidden rounded-full bg-[#1a1008]">
-              <div className="h-full bg-gradient-to-r from-[#c9a040] to-[#f5c842] transition-all duration-500" style={{ width: `${props.progress.p}%` }} />
+          <div className="mt-6" aria-live="polite">
+            <div className="h-0.5 bg-rule">
+              <div className="h-0.5 bg-brand" style={{ width: `${props.progress.p}%` }} />
             </div>
-            <p className="mt-2 text-center font-cinzel text-[0.62rem] uppercase tracking-widest text-[#7a5a25]">{props.progress.l}</p>
+            <p className="mt-2 text-xs text-muted">{props.progress.l}</p>
           </div>
         )}
-      </aside>
+      </div>
     </div>
   );
 }
 
 function ReviewLine({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="font-cinzel text-[0.62rem] uppercase tracking-widest text-[#6f501f]">{label}</span>
-      <span className={`font-mono ${strong ? 'text-base font-bold text-[#f5c842]' : 'text-[#c9a040]'}`}>{value}</span>
-    </div>
+    <>
+      <dt className={`${strong ? 'mt-3' : ''} py-1 text-sm text-muted`}>{label}</dt>
+      <dd className={`${strong ? 'mt-3 text-base font-medium' : 'text-sm'} py-1 text-right tabular-nums`}>{value}</dd>
+    </>
   );
+}
+
+function StatusNote({ status }: { status: { type: 'ok' | 'err' | 'info'; msg: string } | null }) {
+  if (!status) return null;
+  const tone = status.type === 'ok' ? 'text-good' : status.type === 'err' ? 'text-bad' : 'text-muted';
+  return <p role="status" className={`mt-4 text-sm leading-6 ${tone}`}>{status.msg}</p>;
 }
 
 function HistoryPanel({ wallet, search, inscriptions, total, profiles, onSearch, onCast, onConnect }: {
@@ -1500,42 +1233,35 @@ function HistoryPanel({ wallet, search, inscriptions, total, profiles, onSearch,
 }) {
   if (!wallet) {
     return (
-      <div className="rounded-2xl border border-dashed border-[#3a2808] bg-black/25 p-10 text-center">
-        <History className="mx-auto mb-4 text-[#6f501f]" size={42} />
-        <h2 className="font-cinzel-decorative text-2xl tracking-widest text-[#f5c842]">Profile History</h2>
-        <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#9c793c]">Connect your wallet to see every inscription ID indexed to that ordinal address.</p>
-        <button onClick={onConnect} className="mt-5 rounded-xl bg-[#f5c842] px-5 py-3 font-cinzel text-[0.7rem] font-bold uppercase tracking-widest text-black">Connect Wallet</button>
+      <div>
+        <p className="text-sm leading-6 text-muted">Connect a wallet to see inscription IDs for that address.</p>
+        <button type="button" onClick={onConnect} className={`${primary} mt-8`}>Connect wallet</button>
       </div>
     );
   }
 
   return (
     <div>
-      <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-        <div>
-          <h2 className="font-cinzel-decorative text-2xl tracking-widest text-[#f5c842]">Profile History</h2>
-          <p className="mt-2 text-sm text-[#7a5a25]">{total} indexed inscription{total === 1 ? '' : 's'} found for this wallet.</p>
-        </div>
-        <div className="relative min-w-[220px]">
-          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5a4018]" size={15} />
-          <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Search history" className="w-full rounded-xl border border-[#2a1808] bg-black/35 py-2 pl-9 pr-3 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]" />
-        </div>
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <p className="text-sm text-muted">{total} from this wallet.</p>
+        <label className="block sm:w-56">
+          <span className="sr-only">Search history</span>
+          <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Search" className={field} />
+        </label>
       </div>
-
       {!inscriptions.length ? (
-        <div className="rounded-2xl border border-dashed border-[#2a1a08] bg-black/20 p-10 text-center">
-          <Coins className="mx-auto mb-3 text-[#4a3018]" size={42} />
-          <p className="mb-5 text-sm text-[#7a5a25]">{search ? 'No inscriptions match your search.' : 'No inscriptions found for this wallet yet.'}</p>
-          <button onClick={onCast} className="font-cinzel text-[0.7rem] uppercase tracking-widest text-[#c9a040] hover:text-[#f5c842]">Create an inscription</button>
+        <div className="mt-10">
+          <p className="text-sm text-muted">{search ? 'No matches.' : 'No inscriptions yet.'}</p>
+          <button type="button" onClick={onCast} className={`${textBtn} mt-4 underline underline-offset-4`}>Inscribe</button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="mt-6 divide-y divide-rule">
           {inscriptions.map((ins) => (
-            <React.Fragment key={ins.wishTxid}>
+            <li key={ins.wishTxid} className="py-6">
               <InscriptionCard ins={ins} profile={profiles[ins.address]} />
-            </React.Fragment>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );
@@ -1543,67 +1269,44 @@ function HistoryPanel({ wallet, search, inscriptions, total, profiles, onSearch,
 
 function MuseumGallery({ inscriptions, profiles }: { inscriptions: Inscription[]; profiles: Record<string, Profile> }) {
   return (
-    <section className="rounded-2xl border border-[#3a2808] bg-[#100904]/88 p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">On-Chain Museum</h2>
-          <p className="mt-1 text-sm text-[#7a5a25]">All inscriptions created on this website, indexed by profile with visible inscription IDs.</p>
-        </div>
-        <Clock size={16} className="shrink-0 text-[#7a5a25]" />
-      </div>
+    <section>
+      <p className="text-sm leading-6 text-muted">Inscriptions made on this site, with their IDs.</p>
       {!inscriptions.length ? (
-        <p className="rounded-xl border border-dashed border-[#2a1808] bg-black/25 p-5 text-center text-sm text-[#7a5a25]">Inscriptions created here will appear in the museum.</p>
+        <p className="mt-8 text-sm text-muted">Nothing here yet.</p>
       ) : (
-        <div className="max-h-[820px] space-y-3 overflow-y-auto pr-1">
+        <ul className="mt-6 divide-y divide-rule">
           {inscriptions.map((ins) => (
-            <div key={ins.wishTxid} className="flex items-center gap-3 rounded-xl border border-[#2a1808] bg-black/25 p-3">
+            <li key={ins.wishTxid} className="flex gap-4 py-5">
               <PreviewThumb ins={ins} compact />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-[#d4a040]">{ins.wish}</p>
-                <p className="mt-1 truncate text-[0.7rem] text-[#7a5a25]">{profiles[ins.address]?.displayName || `${ins.address.slice(0, 6)}...${ins.address.slice(-4)}`}</p>
-                <p className="mt-2 font-cinzel text-[0.55rem] uppercase tracking-widest text-[#6f501f]">Inscription ID</p>
-                <p className="mt-1 break-all font-mono text-[0.65rem] text-[#c9a040]">{inscriptionId(ins)}</p>
+                <p className="truncate text-sm">{ins.wish}</p>
+                <p className="mt-1 truncate text-xs text-muted">{profiles[ins.address]?.displayName || shortAddr(ins.address)}</p>
+                <p className="mt-2 break-all text-xs text-muted">{inscriptionId(ins)}</p>
+                <p className="mt-3 flex gap-4 text-sm">
+                  <a href={ordinalsContentUrl(ins)} target="_blank" rel="noopener noreferrer" className="underline decoration-rule underline-offset-4">Content</a>
+                  <a href={ordIoUrl(ins)} target="_blank" rel="noopener noreferrer" className="underline decoration-rule underline-offset-4">Ord.io</a>
+                </p>
               </div>
-              <div className="flex flex-col gap-2">
-                <a href={ordinalsContentUrl(ins)} target="_blank" rel="noopener noreferrer" className="text-[#7a5a25] transition hover:text-[#f5c842]" aria-label="View on-chain content">
-                  <ImageIcon size={14} />
-                </a>
-                <a href={ordIoUrl(ins)} target="_blank" rel="noopener noreferrer" className="text-[#7a5a25] transition hover:text-[#f5c842]" aria-label="View on Ord.io">
-                  <ExternalLink size={14} />
-                </a>
-              </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </section>
   );
 }
 
 function HowItWorks() {
-  const steps = [
-    ['Connect your Bitcoin wallet', 'Use Xverse for live inscription support, then confirm you are on Bitcoin Mainnet.'],
-    ['Choose what to preserve', 'Upload code, images, songs, HTML, JSON, writing, or art. Smaller files cost less.'],
-    ['Pick fee speed', 'Slow is cheaper. Fast is usually quicker. Custom is for advanced users watching mempool fees.'],
-    ['Review and sign', 'Check network fee, service fee, content type, and wallet prompt before signing.'],
-    ['Visit your museum', 'After submission, your profile history and the public museum show the on-chain inscription ID and link.'],
-  ];
-
   return (
-    <section className="rounded-2xl border border-[#3a2808] bg-[#100904]/88 p-5">
-      <h2 className="mb-4 font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">How To Inscribe</h2>
-      <div className="grid gap-3">
-        {steps.map(([title, body], index) => (
-          <div key={title} className="flex gap-3 rounded-xl border border-[#2a1808] bg-black/25 p-3">
-            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f5c842] font-mono text-sm font-bold text-black">{index + 1}</div>
-            <div>
-              <div className="font-cinzel text-[0.68rem] uppercase tracking-widest text-[#c9a040]">{title}</div>
-              <p className="mt-1 text-sm leading-6 text-[#7a5a25]">{body}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
+    <details className="mt-20">
+      <summary className="cursor-pointer text-sm text-muted">How to inscribe</summary>
+      <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-6">
+        <li>Connect Xverse on Bitcoin mainnet.</li>
+        <li>Add text or a file under 500KB.</li>
+        <li>Choose a fee. Custom sets the rate yourself.</li>
+        <li>Review the total, then sign in your wallet.</li>
+        <li>The inscription ID shows on your profile and in the museum.</li>
+      </ol>
+    </details>
   );
 }
 
@@ -1617,200 +1320,156 @@ function MuseumChat({ wallet, profiles, messages, text, onText, onSend, onConnec
   onConnect: () => void;
 }) {
   return (
-    <section className="rounded-2xl border border-[#3a2808] bg-[#100904]/88 p-5">
-      <h2 className="mb-2 flex items-center gap-2 font-cinzel text-[0.78rem] font-bold uppercase tracking-widest text-[#f5c842]">
-        <MessageCircle size={16} /> Museum Chat
-      </h2>
-      <p className="mb-4 text-sm leading-6 text-[#7a5a25]">Talk with other ordinal wallet profiles. Messages are attached to wallet addresses.</p>
-
-      <div className="mb-4 max-h-[320px] space-y-3 overflow-y-auto rounded-xl border border-[#2a1808] bg-black/25 p-3">
+    <section>
+      <p className="text-sm leading-6 text-muted">Messages stay with the wallet that sent them.</p>
+      <div className="mt-8 max-h-80 space-y-6 overflow-y-auto">
         {!messages.length ? (
-          <p className="py-8 text-center text-sm text-[#5f4218]">No messages yet. Start the museum wall.</p>
+          <p className="text-sm text-muted">No messages yet.</p>
         ) : (
           messages.map((msg) => {
             const profile = profiles[msg.address];
             return (
-              <div key={msg.id} className="rounded-lg border border-[#2a1808] bg-[#120a04] p-3">
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-semibold text-[#d4a040]">{profile?.displayName || `${msg.address.slice(0, 6)}...${msg.address.slice(-4)}`}</span>
+              <article key={msg.id}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="truncate text-sm font-medium">{profile?.displayName || shortAddr(msg.address)}</p>
                   {profile?.twitterUrl && (
-                    <a href={profile.twitterUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-[#f5c842]" aria-label="Twitter profile">
-                      <AtSign size={13} />
-                    </a>
+                    <a href={profile.twitterUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-muted underline underline-offset-4">X</a>
                   )}
                 </div>
-                <p className="text-sm leading-6 text-[#9c793c]">{msg.text}</p>
-              </div>
+                <p className="mt-1 text-sm leading-6">{msg.text}</p>
+              </article>
             );
           })
         )}
       </div>
-
       {wallet ? (
-        <div className="flex gap-2">
-          <input
-            value={text}
-            onChange={(e) => onText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onSend();
-            }}
-            placeholder="Leave a museum message..."
-            maxLength={280}
-            className="min-w-0 flex-1 rounded-xl border border-[#2a1808] bg-black/35 px-3 py-2 text-sm text-[#e8d5a3] outline-none focus:border-[#c9a040]"
-          />
-          <button onClick={onSend} className="rounded-xl bg-[#f5c842] px-3 text-black transition hover:brightness-110" aria-label="Send message">
-            <Send size={16} />
-          </button>
+        <div className="mt-8 flex items-end gap-4">
+          <label className="min-w-0 flex-1">
+            <span className="sr-only">Message</span>
+            <input
+              value={text}
+              onChange={(e) => onText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onSend();
+              }}
+              placeholder="Message"
+              maxLength={280}
+              className={field}
+            />
+          </label>
+          <button type="button" onClick={onSend} className={primary}>Send</button>
         </div>
       ) : (
-        <button onClick={onConnect} className="w-full rounded-xl border border-[#f5c842]/30 bg-[#f5c842]/10 px-4 py-3 font-cinzel text-[0.68rem] font-bold uppercase tracking-widest text-[#f5c842]">
-          Connect to chat
-        </button>
+        <button type="button" onClick={onConnect} className={`${primary} mt-8`}>Connect to chat</button>
       )}
     </section>
   );
 }
 
 function InscriptionCard({ ins, profile }: { ins: Inscription; profile?: Profile }) {
+  const status = ins.status === 'confirmed' ? 'Confirmed' : ins.status === 'failed' ? 'Failed' : 'Pending';
+  const tone = ins.status === 'confirmed' ? 'text-good' : ins.status === 'failed' ? 'text-bad' : 'text-muted';
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#2a1a08] bg-gradient-to-br from-[#130e06] to-[#0d0804] transition hover:border-[#5a3a18]">
-      <div className="relative aspect-square bg-black/40">
-        <PreviewThumb ins={ins} />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-        <div className="absolute right-2 top-2">
-          <StatusBadge status={ins.status} />
-        </div>
+    <article>
+      <PreviewThumb ins={ins} />
+      <div className="flex items-baseline justify-between gap-4 text-xs">
+        <span className="text-muted">{(ins.contentType.split('/')[1] || ins.contentType).toLowerCase()}</span>
+        <span className={tone}>{status}</span>
       </div>
-      <div className="p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="truncate font-cinzel text-[0.54rem] uppercase tracking-widest text-[#7a5a25]">{(ins.contentType.split('/')[1] || ins.contentType).toUpperCase()}</span>
-          {ins.serviceFee && <span className="inline-flex items-center gap-1 text-[0.54rem] uppercase tracking-widest text-[#70c070]"><ShieldCheck size={9} /> Site</span>}
-        </div>
-        <div className="mb-2 flex items-center gap-2 text-[0.68rem] text-[#7a5a25]">
-          <User size={12} />
-          <span className="truncate">{profile?.displayName || `${ins.address.slice(0, 6)}...${ins.address.slice(-4)}`}</span>
-          {profile?.twitterUrl && <AtSign size={12} className="text-[#f5c842]" />}
-        </div>
-        <p className="line-clamp-2 min-h-[40px] text-sm italic leading-5 text-[#d4a040]">"{ins.wish}"</p>
-        <div className="mt-3 rounded-xl border border-[#2a1a08] bg-black/25 p-2">
-          <div className="font-cinzel text-[0.52rem] uppercase tracking-widest text-[#6f501f]">Inscription ID</div>
-          <div className="mt-1 break-all font-mono text-[0.66rem] leading-4 text-[#c9a040]">{inscriptionId(ins)}</div>
-        </div>
-        <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#2a1a08] pt-3">
-          <a href={ordinalsContentUrl(ins)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#c9a040] transition hover:text-[#f5c842]">
-            Content <ExternalLink size={9} />
-          </a>
-          <a href={ordIoUrl(ins)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.58rem] uppercase tracking-widest text-[#c9a040] transition hover:text-[#f5c842]">
-            Ord.io <ExternalLink size={9} />
-          </a>
-        </div>
-      </div>
-    </div>
+      <p className="mt-2 text-xs text-muted">
+        {profile?.displayName || shortAddr(ins.address)}
+        {profile?.twitterUrl && (
+          <>
+            {' · '}
+            <a href={profile.twitterUrl} target="_blank" rel="noopener noreferrer" className="underline decoration-rule underline-offset-4">X</a>
+          </>
+        )}
+      </p>
+      <p className="mt-2 text-sm leading-6">{ins.wish}</p>
+      <p className="mt-3 text-xs text-muted">Inscription ID</p>
+      <p className="mt-1 break-all text-xs">{inscriptionId(ins)}</p>
+      <p className="mt-3 flex gap-4 text-sm">
+        <a href={ordinalsContentUrl(ins)} target="_blank" rel="noopener noreferrer" className="underline decoration-rule underline-offset-4">Content</a>
+        <a href={ordIoUrl(ins)} target="_blank" rel="noopener noreferrer" className="underline decoration-rule underline-offset-4">Ord.io</a>
+      </p>
+    </article>
   );
 }
 
 function PreviewThumb({ ins, compact }: { ins: Inscription; compact?: boolean }) {
-  const size = compact ? 'h-12 w-12 rounded-lg' : 'h-full w-full';
-  if (ins.contentType.startsWith('image/')) {
-    return (
-      <img
-        src={ordinalsContentUrl(ins)}
-        alt="Inscription content"
-        className={`${size} object-cover`}
-        referrerPolicy="no-referrer"
-        onError={(e) => {
-          (e.currentTarget as HTMLImageElement).style.display = 'none';
-        }}
-      />
-    );
-  }
-
-  if (ins.contentType.startsWith('audio/')) {
-    return (
-      <div className={`${size} grid place-items-center bg-[#120a04] p-3 text-center`}>
-        <Music className="mb-1 text-[#c9a040]" size={compact ? 18 : 38} />
-        {!compact && <p className="text-sm italic leading-6 text-[#d4a040]">On-chain audio inscription</p>}
-      </div>
-    );
-  }
-
+  if (!ins.contentType.startsWith('image/')) return null;
   return (
-    <div className={`${size} grid place-items-center bg-[#120a04] p-3 text-center`}>
-      <FileText className="mb-1 text-[#7a5a25]" size={compact ? 18 : 34} />
-      {!compact && <p className="line-clamp-5 text-sm italic leading-6 text-[#d4a040]">"{ins.wish}"</p>}
-    </div>
+    <img
+      src={ordinalsContentUrl(ins)}
+      alt={ins.wish || 'Inscription'}
+      className={compact ? 'h-14 w-14 shrink-0 object-cover' : 'mb-4 max-h-56 w-full object-cover'}
+      referrerPolicy="no-referrer"
+      onError={(e) => {
+        (e.currentTarget as HTMLImageElement).style.display = 'none';
+      }}
+    />
   );
 }
 
-function StatusBadge({ status }: { status?: 'pending' | 'confirmed' | 'failed' }) {
-  if (status === 'confirmed') {
-    return <span className="rounded-full bg-[#55d070] px-2 py-1 text-[0.55rem] font-bold uppercase text-black">Confirmed</span>;
-  }
-  if (status === 'failed') {
-    return <span className="rounded-full bg-[#cc5050] px-2 py-1 text-[0.55rem] font-bold uppercase text-white">Failed</span>;
-  }
-  return <span className="rounded-full bg-[#f5c842] px-2 py-1 text-[0.55rem] font-bold uppercase text-black">Pending</span>;
+function shortAddr(address: string) {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function Modal({ label, children }: { label: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 sm:items-center" role="presentation">
+      <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={label} className="max-h-[90vh] w-full max-w-md overflow-y-auto bg-paper p-6 outline-none sm:p-8">
+        {children}
+      </div>
+    </div>
+  );
 }
 
 function SuccessModal({ lastTxid, onClose }: { lastTxid: string; onClose: () => void }) {
   const visibleInscriptionId = lastTxid.includes('i') ? lastTxid : `${lastTxid}i0`;
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 p-6 backdrop-blur-md">
-      <motion.div initial={{ scale: 0.88, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.88, y: 20, opacity: 0 }} className="w-full max-w-md overflow-hidden rounded-3xl border border-[#f5c842]/40 bg-[#1a120a] p-8 text-center shadow-[0_0_100px_rgba(245,200,66,0.2)]">
-        <div className="mx-auto mb-6 grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-[#c9a040] to-[#f5c842] shadow-[0_0_30px_rgba(201,160,64,0.4)]">
-          <Check size={40} className="text-black" strokeWidth={3} />
-        </div>
-        <h2 className="font-cinzel-decorative text-2xl uppercase tracking-widest text-[#f5c842]">Inscription Sent</h2>
-        <p className="mt-3 text-sm leading-7 text-[#9c793c]">Your inscription was submitted and is indexing on your profile and the public museum.</p>
-        <div className="my-6 rounded-2xl border border-[#3a2808] bg-black/40 p-4">
-          <div className="mb-4 text-left">
-            <p className="font-cinzel text-[0.58rem] uppercase tracking-widest text-[#6f501f]">Inscription ID</p>
-            <p className="mt-2 break-all font-mono text-xs leading-5 text-[#f5c842]">{visibleInscriptionId}</p>
-          </div>
-          <div className="flex items-center justify-center gap-4">
-          <a href={`https://mempool.space/tx/${lastTxid}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.65rem] uppercase tracking-widest text-[#c9a040] hover:text-[#f5c842]">View Tx <ExternalLink size={10} /></a>
-          <a href={`https://ord.io/${visibleInscriptionId}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-cinzel text-[0.65rem] uppercase tracking-widest text-[#c9a040] hover:text-[#f5c842]">View Ord <ExternalLink size={10} /></a>
-          </div>
-        </div>
-        <button onClick={onClose} className="w-full rounded-xl bg-gradient-to-r from-[#c9a040] to-[#f5c842] py-4 font-cinzel text-[0.8rem] font-bold uppercase tracking-[0.2em] text-black">
-          Back to App
-        </button>
-      </motion.div>
-    </motion.div>
+    <Modal label="Inscription sent">
+      <h2 className="text-2xl font-medium tracking-tight">Sent</h2>
+      <p className="mt-3 text-sm leading-6 text-muted">It is indexing on your profile and in the museum.</p>
+      <p className="mt-6 text-xs text-muted">Inscription ID</p>
+      <p className="mt-1 break-all text-sm">{visibleInscriptionId}</p>
+      <p className="mt-4 flex gap-4 text-sm">
+        <a href={`https://mempool.space/tx/${lastTxid}`} target="_blank" rel="noopener noreferrer" className="underline decoration-rule underline-offset-4">Transaction</a>
+        <a href={`https://ord.io/${visibleInscriptionId}`} target="_blank" rel="noopener noreferrer" className="underline decoration-rule underline-offset-4">Ord.io</a>
+      </p>
+      <button type="button" onClick={onClose} className={`${primary} mt-8 w-full`}>Done</button>
+    </Modal>
   );
 }
 
 function WalletModal({ onClose, onXverse, onUnisat }: { onClose: () => void; onXverse: () => void; onUnisat: () => void }) {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm">
-      <motion.div initial={{ scale: 0.92, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92, y: 20 }} className="w-full max-w-sm rounded-2xl border border-[#f5c842]/30 bg-[#1a120a] p-6 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-        <div className="mb-6 flex items-center justify-between">
-          <h3 className="font-cinzel text-sm uppercase tracking-widest text-[#f5c842]">Connect Wallet</h3>
-          <button onClick={onClose} className="text-[#7a5a25] transition hover:text-[#f5c842]"><X size={20} /></button>
-        </div>
-        <div className="mb-5 rounded-xl border border-[#2a1808] bg-black/30 p-4">
-          <h4 className="mb-2 flex items-center gap-2 font-cinzel text-[0.68rem] font-bold uppercase tracking-widest text-[#c9a040]">
-            <ShieldCheck size={14} /> Safe Connect
-          </h4>
-          <ul className="space-y-2 text-sm leading-6 text-[#9c793c]">
-            <li>Connect only shares public Bitcoin addresses.</li>
-            <li>No transaction, inscription, or service fee happens here.</li>
-            <li>Never enter a seed phrase or private key.</li>
-          </ul>
-        </div>
-        <div className="space-y-3">
-          <button onClick={onXverse} className="flex w-full items-center justify-between rounded-xl border border-[#3a2808] bg-gradient-to-br from-[#1c1208] to-[#130d05] p-4 font-cinzel text-[0.8rem] font-bold uppercase tracking-wider text-[#b09040] transition hover:border-[#c9a040] hover:text-[#f5c842]">
-            <span>Xverse</span>
-            <span className="text-xs text-[#6f501f]">Recommended</span>
-          </button>
-          <button onClick={onUnisat} className="flex w-full items-center justify-between rounded-xl border border-[#3a2808] bg-gradient-to-br from-[#1c1208] to-[#130d05] p-4 font-cinzel text-[0.8rem] font-bold uppercase tracking-wider text-[#b09040] transition hover:border-[#c9a040] hover:text-[#f5c842]">
-            <span>UniSat</span>
-            <span className="text-xs text-[#6f501f]">Connect only</span>
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
+    <Modal label="Connect wallet">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="text-2xl font-medium tracking-tight">Connect</h2>
+        <button type="button" onClick={onClose} className={textBtn}>Close</button>
+      </div>
+      <p className="mt-4 text-sm leading-6 text-muted">
+        This shares a public address. Nothing is signed here. Never enter a seed phrase.
+      </p>
+      <div className="mt-8 border-t border-rule">
+        <button type="button" onClick={onXverse} className="flex w-full items-baseline justify-between gap-4 border-b border-rule py-4 text-left">
+          <span className="text-sm font-medium">Xverse</span>
+          <span className="text-xs text-muted">For inscriptions</span>
+        </button>
+        <button type="button" onClick={onUnisat} className="flex w-full items-baseline justify-between gap-4 border-b border-rule py-4 text-left">
+          <span className="text-sm font-medium">UniSat</span>
+          <span className="text-xs text-muted">Connect only</span>
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -1825,28 +1484,22 @@ function ConfirmModal(props: {
   onConfirm: () => void;
 }) {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm">
-      <motion.div initial={{ scale: 0.92, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92, y: 20 }} className="w-full max-w-md rounded-2xl border border-[#f5c842]/30 bg-[#1a120a] p-6 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-        <h3 className="mb-6 flex items-center justify-center gap-2 text-center font-cinzel uppercase tracking-widest text-[#f5c842]">
-          <AlertTriangle size={18} /> Confirm Inscription
-        </h3>
-        <p className="mb-5 rounded-xl border border-[#3a2808] bg-black/30 p-3 text-sm leading-6 text-[#9c793c]">
-          This is the only step that asks your wallet to create an inscription and pay the service fee. Check the wallet prompt before approving.
-        </p>
-        <div className="mb-8 space-y-4 text-sm">
-          <ReviewLine label="Content" value={props.selFile ? `File: ${props.selFile.name}` : props.wishText ? 'Text inscription' : 'Empty'} />
-          <ReviewLine label="Fee rate" value={`${props.currentRate} sats/vB`} />
-          <ReviewLine label="Network fee" value={`${props.netFee.toLocaleString()} sats`} />
-          <ReviewLine label="Service fee" value={`${SERVICE_FEE.toLocaleString()} sats`} />
-          <div className="border-t border-[#3a2808] pt-3">
-            <ReviewLine label="Total due" value={`${props.totalFee.toLocaleString()} sats`} strong />
-          </div>
-        </div>
-        <div className="flex gap-3">
-          <button onClick={props.onCancel} className="flex-1 rounded-xl border border-[#3a2808] py-3 font-cinzel text-[0.7rem] uppercase tracking-widest text-[#7a5a25] transition hover:bg-white/5">Cancel</button>
-          <button onClick={props.onConfirm} className="flex-1 rounded-xl bg-gradient-to-br from-[#f5c842] to-[#c9a040] py-3 font-cinzel text-[0.7rem] font-bold uppercase tracking-widest text-black transition hover:brightness-110">Confirm</button>
-        </div>
-      </motion.div>
-    </motion.div>
+    <Modal label="Confirm inscription">
+      <h2 className="text-2xl font-medium tracking-tight">Confirm</h2>
+      <p className="mt-3 text-sm leading-6 text-muted">
+        Signing creates the inscription and pays the service fee. Check your wallet before you approve.
+      </p>
+      <dl className="mt-6 grid grid-cols-[1fr_auto] gap-x-8">
+        <ReviewLine label="Content" value={props.selFile ? `File: ${props.selFile.name}` : props.wishText ? 'Text inscription' : 'Empty'} />
+        <ReviewLine label="Fee rate" value={`${props.currentRate} sats/vB`} />
+        <ReviewLine label="Network fee" value={`${props.netFee.toLocaleString()} sats`} />
+        <ReviewLine label="Service fee" value={`${SERVICE_FEE.toLocaleString()} sats`} />
+        <ReviewLine label="Total" value={`${props.totalFee.toLocaleString()} sats`} strong />
+      </dl>
+      <div className="mt-8 flex items-center gap-6">
+        <button type="button" onClick={props.onConfirm} className={primary}>Confirm</button>
+        <button type="button" onClick={props.onCancel} className={textBtn}>Cancel</button>
+      </div>
+    </Modal>
   );
 }
